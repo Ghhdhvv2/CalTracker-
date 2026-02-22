@@ -1124,7 +1124,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   const { data: { session } } = await sb.auth.getSession();
   if (session?.user) {
     state.user = session.user;
-    await loadUserData();
+    try { await loadUserData(); } catch (e) { console.error('loadUserData failed:', e); toast('Failed to load your data — please refresh', 'error'); }
     showView('view-app');
     initApp();
     setLoading(false);
@@ -1140,12 +1140,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     if (event === 'SIGNED_IN' && session?.user) {
       state.user = session.user;
-      await loadUserData();
+      try { await loadUserData(); } catch (e) { console.error('loadUserData failed:', e); toast('Failed to load your data — please refresh', 'error'); }
       showView('view-app');
       initApp();
+      setLoading(false);
     } else if (event === 'SIGNED_OUT') {
-       state = { user: null, targetCal: null, targetWeight: null, targetProtein: null, targetCarbs: null, targetFat: null, targetFibre: null, foodLog: [], weightLog: [], savedFoods: [], reportFilter: '7d' };state =
-      showView('view-auth');
+       state = { user: null, targetCal: null, targetWeight: null, targetProtein: null, targetCarbs: null, targetFat: null, targetFibre: null, foodLog: [], weightLog: [], savedFoods: [], reportFilter: '7d' };
+       state = showView('view-auth');
     } else if (event === 'TOKEN_REFRESHED' && session?.user) {
       // Silently update user reference — no reload needed
       state.user = session.user;
@@ -1204,7 +1205,7 @@ async function doLogout() {
   if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
     await sb.auth.signOut();
   } else {
-    state = { user: null, targetCal: null, targetWeight: null, foodLog: [], weightLog: [], reportFilter: '7d' };
+    state = { user: null, targetCal: null, targetWeight: null, targetProtein: null, targetCarbs: null, targetFat: null, targetFibre: null, foodLog: [], weightLog: [], savedFoods: [], reportFilter: '7d' };
     showView('view-auth');
   }
 }
