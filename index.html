@@ -1144,7 +1144,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       showView('view-app');
       initApp();
     } else if (event === 'SIGNED_OUT') {
-      state = { user: null, targetCal: null, targetWeight: null, foodLog: [], weightLog: [], reportFilter: '7d' };
+       state = { user: null, targetCal: null, targetWeight: null, targetProtein: null, targetCarbs: null, targetFat: null, targetFibre: null, foodLog: [], weightLog: [], savedFoods: [], reportFilter: '7d' };state =
       showView('view-auth');
     } else if (event === 'TOKEN_REFRESHED' && session?.user) {
       // Silently update user reference — no reload needed
