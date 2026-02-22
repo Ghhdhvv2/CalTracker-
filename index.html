@@ -799,23 +799,23 @@
             <div class="target-row" style="flex-wrap:wrap; gap:10px;">
               <div class="field-group" style="flex:1 1 140px; margin-bottom:0">
                 <label class="field-label">Calories (kcal)</label>
-                <input class="field-input" type="number" id="target-cal-input" placeholder="2000" min="0">
+                <input class="field-input" type="number" id="target-cal-input" placeholder="2000" min="0" step="1">
               </div>
               <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
                 <label class="field-label">Protein (g)</label>
-                <input class="field-input" type="number" id="target-protein-input" placeholder="150" min="0">
+                <input class="field-input" type="number" id="target-protein-input" placeholder="150" min="0" step="1">
               </div>
               <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
                 <label class="field-label">Carbs (g)</label>
-                <input class="field-input" type="number" id="target-carbs-input" placeholder="250" min="0">
+                <input class="field-input" type="number" id="target-carbs-input" placeholder="250" min="0" step="1">
               </div>
               <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
                 <label class="field-label">Fat (g)</label>
-                <input class="field-input" type="number" id="target-fat-input" placeholder="70" min="0">
+                <input class="field-input" type="number" id="target-fat-input" placeholder="70" min="0" step="1">
               </div>
               <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
                 <label class="field-label">Fibre (g)</label>
-                <input class="field-input" type="number" id="target-fibre-input" placeholder="30" min="0">
+                <input class="field-input" type="number" id="target-fibre-input" placeholder="30" min="0" step="1">
               </div>
               <button class="btn-set" style="align-self:flex-end" onclick="setTarget()">Save</button>
             </div>
@@ -1350,10 +1350,10 @@ async function setTarget() {
   const cal = parseInt(document.getElementById('target-cal-input').value);
   if (!cal || cal < 1) { toast('Please enter a calorie target', 'error'); return; }
   state.targetCal     = cal;
-  state.targetProtein = parseFloat(document.getElementById('target-protein-input').value) || null;
-  state.targetCarbs   = parseFloat(document.getElementById('target-carbs-input').value)   || null;
-  state.targetFat     = parseFloat(document.getElementById('target-fat-input').value)     || null;
-  state.targetFibre   = parseFloat(document.getElementById('target-fibre-input').value)   || null;
+  state.targetProtein = parseInt(document.getElementById('target-protein-input').value) || null;
+  state.targetCarbs   = parseInt(document.getElementById('target-carbs-input').value)   || null;
+  state.targetFat     = parseInt(document.getElementById('target-fat-input').value)     || null;
+  state.targetFibre   = parseInt(document.getElementById('target-fibre-input').value)   || null;
   await saveSettings();
   renderDashboard();
   toast('Targets saved ✓', 'success');
