@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Nourish — Calorie & Macro Tracker</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230e0f0e'/><text y='.9em' font-size='75' x='12' font-family='serif' fill='%23a8e063'>N</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -794,39 +793,11 @@
         </div>
 
         <div class="dash-right">
-          <!-- Target setter -->
-          <div class="target-card">
-            <div class="card-title">Daily Targets</div>
-            <div class="target-row" style="flex-wrap:wrap; gap:10px;">
-              <div class="field-group" style="flex:1 1 140px; margin-bottom:0">
-                <label class="field-label">Calories (kcal)</label>
-                <input class="field-input" type="number" id="target-cal-input" placeholder="2000" min="0" step="1">
-              </div>
-              <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
-                <label class="field-label">Protein (g)</label>
-                <input class="field-input" type="number" id="target-protein-input" placeholder="150" min="0" step="1">
-              </div>
-              <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
-                <label class="field-label">Carbs (g)</label>
-                <input class="field-input" type="number" id="target-carbs-input" placeholder="250" min="0" step="1">
-              </div>
-              <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
-                <label class="field-label">Fat (g)</label>
-                <input class="field-input" type="number" id="target-fat-input" placeholder="70" min="0" step="1">
-              </div>
-              <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
-                <label class="field-label">Fibre (g)</label>
-                <input class="field-input" type="number" id="target-fibre-input" placeholder="30" min="0" step="1">
-              </div>
-              <button class="btn-set" style="align-self:flex-end" onclick="setTarget()">Save</button>
-            </div>
-          </div>
-
           <!-- Add food -->
           <div class="log-card" style="margin-bottom:0">
             <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
               Log Food Entry
-              <button class="btn-set" style="font-size:0.78rem;padding:6px 12px" onclick="toggleSavedFoods()">📋 Saved Foods</button>
+              <button type="button" class="btn-set" style="font-size:0.78rem;padding:6px 12px" onclick="toggleSavedFoods()">📋 Saved Foods</button>
             </div>
             <!-- Saved foods dropdown -->
             <div id="saved-foods-panel" style="display:none;margin-bottom:14px">
@@ -857,8 +828,8 @@
                 <label class="field-label">Fibre (g)</label>
                 <input class="field-input" type="number" id="food-fibre" placeholder="4" min="0">
               </div>
-              <button class="btn-log" style="align-self:flex-end" onclick="logFood()">+ Log</button>
-              <button class="btn-set" style="align-self:flex-end;white-space:nowrap" onclick="saveFood()">💾 Save</button>
+              <button type="button" class="btn-log" style="align-self:flex-end" onclick="logFood()">+ Log</button>
+              <button type="button" class="btn-set" style="align-self:flex-end;white-space:nowrap" onclick="saveFood()">💾 Save</button>
             </div>
           </div>
         </div>
@@ -908,6 +879,34 @@
         <div class="card-title">Today's Entries</div>
         <div class="food-log-list" id="food-log-list">
           <div class="empty-state">No entries yet — log your first meal above ↑</div>
+        </div>
+      </div>
+
+      <!-- Daily Targets -->
+      <div class="target-card">
+        <div class="card-title">Daily Targets</div>
+        <div class="target-row" style="flex-wrap:wrap; gap:10px;">
+          <div class="field-group" style="flex:1 1 140px; margin-bottom:0">
+            <label class="field-label">Calories (kcal)</label>
+            <input class="field-input" type="number" id="target-cal-input" placeholder="2000" min="0">
+          </div>
+          <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
+            <label class="field-label">Protein (g)</label>
+            <input class="field-input" type="number" id="target-protein-input" placeholder="150" min="0" step="1">
+          </div>
+          <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
+            <label class="field-label">Carbs (g)</label>
+            <input class="field-input" type="number" id="target-carbs-input" placeholder="250" min="0" step="1">
+          </div>
+          <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
+            <label class="field-label">Fat (g)</label>
+            <input class="field-input" type="number" id="target-fat-input" placeholder="70" min="0" step="1">
+          </div>
+          <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
+            <label class="field-label">Fibre (g)</label>
+            <input class="field-input" type="number" id="target-fibre-input" placeholder="30" min="0" step="1">
+          </div>
+          <button type="button" class="btn-set" style="align-self:flex-end" onclick="setTarget()">Save</button>
         </div>
       </div>
     </div>
@@ -1146,8 +1145,8 @@ window.addEventListener('DOMContentLoaded', async () => {
       initApp();
       setLoading(false);
     } else if (event === 'SIGNED_OUT') {
-       state = { user: null, targetCal: null, targetWeight: null, targetProtein: null, targetCarbs: null, targetFat: null, targetFibre: null, foodLog: [], weightLog: [], savedFoods: [], reportFilter: '7d' };
-       state = showView('view-auth');
+      state = { user: null, targetCal: null, targetWeight: null, targetProtein: null, targetCarbs: null, targetFat: null, targetFibre: null, foodLog: [], weightLog: [], savedFoods: [], reportFilter: '7d' };
+      showView('view-auth');
     } else if (event === 'TOKEN_REFRESHED' && session?.user) {
       // Silently update user reference — no reload needed
       state.user = session.user;
@@ -1351,10 +1350,10 @@ async function setTarget() {
   const cal = parseInt(document.getElementById('target-cal-input').value);
   if (!cal || cal < 1) { toast('Please enter a calorie target', 'error'); return; }
   state.targetCal     = cal;
-  state.targetProtein = parseInt(document.getElementById('target-protein-input').value) || null;
-  state.targetCarbs   = parseInt(document.getElementById('target-carbs-input').value)   || null;
-  state.targetFat     = parseInt(document.getElementById('target-fat-input').value)     || null;
-  state.targetFibre   = parseInt(document.getElementById('target-fibre-input').value)   || null;
+  state.targetProtein = parseFloat(document.getElementById('target-protein-input').value) || null;
+  state.targetCarbs   = parseFloat(document.getElementById('target-carbs-input').value)   || null;
+  state.targetFat     = parseFloat(document.getElementById('target-fat-input').value)     || null;
+  state.targetFibre   = parseFloat(document.getElementById('target-fibre-input').value)   || null;
   await saveSettings();
   renderDashboard();
   toast('Targets saved ✓', 'success');
