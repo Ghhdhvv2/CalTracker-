@@ -640,6 +640,30 @@
     animation: spin 0.7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── SAVED FOODS ── */
+  .saved-foods-list { display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; }
+  .saved-food-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+  }
+  .saved-food-item .sfi-name { flex: 1; font-weight: 500; }
+  .saved-food-item .sfi-meta { color: var(--text-muted); font-size: 0.75rem; }
+  .btn-use {
+    padding: 5px 12px; background: var(--accent-glow); border: 1px solid var(--accent);
+    border-radius: 6px; color: var(--accent); font-size: 0.78rem; font-weight: 600;
+    cursor: pointer; font-family: 'DM Sans', sans-serif; white-space: nowrap; transition: all 0.2s;
+  }
+  .btn-use:hover { background: var(--accent); color: #0e0f0e; }
+  .btn-del-saved {
+    background: none; border: none; color: var(--text-muted); cursor: pointer;
+    padding: 4px 6px; border-radius: 4px; font-size: 0.85rem; transition: color 0.2s;
+  }
+  .btn-del-saved:hover { color: var(--red); }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -685,6 +709,7 @@
       </div>
       <button class="btn-primary" onclick="doRegister()">Create Account →</button>
     </div>
+
   </div>
 </div>
 
@@ -770,19 +795,42 @@
         <div class="dash-right">
           <!-- Target setter -->
           <div class="target-card">
-            <div class="card-title">Daily Calorie Target</div>
-            <div class="target-row">
-              <div class="field-group">
-                <label class="field-label">Target Calories (kcal)</label>
-                <input class="field-input" type="number" id="target-cal-input" placeholder="e.g. 2000" min="0">
+            <div class="card-title">Daily Targets</div>
+            <div class="target-row" style="flex-wrap:wrap; gap:10px;">
+              <div class="field-group" style="flex:1 1 140px; margin-bottom:0">
+                <label class="field-label">Calories (kcal)</label>
+                <input class="field-input" type="number" id="target-cal-input" placeholder="2000" min="0">
               </div>
-              <button class="btn-set" onclick="setTarget()">Set Target</button>
+              <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
+                <label class="field-label">Protein (g)</label>
+                <input class="field-input" type="number" id="target-protein-input" placeholder="150" min="0">
+              </div>
+              <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
+                <label class="field-label">Carbs (g)</label>
+                <input class="field-input" type="number" id="target-carbs-input" placeholder="250" min="0">
+              </div>
+              <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
+                <label class="field-label">Fat (g)</label>
+                <input class="field-input" type="number" id="target-fat-input" placeholder="70" min="0">
+              </div>
+              <div class="field-group" style="flex:1 1 100px; margin-bottom:0">
+                <label class="field-label">Fibre (g)</label>
+                <input class="field-input" type="number" id="target-fibre-input" placeholder="30" min="0">
+              </div>
+              <button class="btn-set" style="align-self:flex-end" onclick="setTarget()">Save</button>
             </div>
           </div>
 
           <!-- Add food -->
           <div class="log-card" style="margin-bottom:0">
-            <div class="card-title">Log Food Entry</div>
+            <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              Log Food Entry
+              <button class="btn-set" style="font-size:0.78rem;padding:6px 12px" onclick="toggleSavedFoods()">📋 Saved Foods</button>
+            </div>
+            <!-- Saved foods dropdown -->
+            <div id="saved-foods-panel" style="display:none;margin-bottom:14px">
+              <div id="saved-foods-list" class="saved-foods-list"></div>
+            </div>
             <div class="macro-inputs">
               <div class="field-group" style="margin-bottom:0">
                 <label class="field-label">Food / Meal Name</label>
@@ -804,7 +852,12 @@
                 <label class="field-label">Fat (g)</label>
                 <input class="field-input" type="number" id="food-fat" placeholder="12" min="0">
               </div>
+              <div class="field-group" style="margin-bottom:0">
+                <label class="field-label">Fibre (g)</label>
+                <input class="field-input" type="number" id="food-fibre" placeholder="4" min="0">
+              </div>
               <button class="btn-log" style="align-self:flex-end" onclick="logFood()">+ Log</button>
+              <button class="btn-set" style="align-self:flex-end;white-space:nowrap" onclick="saveFood()">💾 Save</button>
             </div>
           </div>
         </div>
@@ -813,20 +866,22 @@
       <!-- Macro progress bars -->
       <div class="macros-card">
         <div class="card-title">Macro Breakdown</div>
-        <div class="macro-bars">
+        <div class="macro-bars" style="grid-template-columns:repeat(4,1fr)">
           <div class="macro-bar-item">
             <div class="macro-bar-header">
               <span class="macro-bar-name" style="color:var(--blue)">Protein</span>
               <span class="macro-bar-val" id="bar-protein-val">0g</span>
             </div>
             <div class="bar-track"><div class="bar-fill bar-protein" id="bar-protein" style="width:0%"></div></div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px" id="bar-protein-target"></div>
           </div>
           <div class="macro-bar-item">
             <div class="macro-bar-header">
-              <span class="macro-bar-name" style="color:var(--amber)">Carbohydrates</span>
+              <span class="macro-bar-name" style="color:var(--amber)">Carbs</span>
               <span class="macro-bar-val" id="bar-carbs-val">0g</span>
             </div>
             <div class="bar-track"><div class="bar-fill bar-carbs" id="bar-carbs" style="width:0%"></div></div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px" id="bar-carbs-target"></div>
           </div>
           <div class="macro-bar-item">
             <div class="macro-bar-header">
@@ -834,6 +889,15 @@
               <span class="macro-bar-val" id="bar-fat-val">0g</span>
             </div>
             <div class="bar-track"><div class="bar-fill bar-fat" id="bar-fat" style="width:0%"></div></div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px" id="bar-fat-target"></div>
+          </div>
+          <div class="macro-bar-item">
+            <div class="macro-bar-header">
+              <span class="macro-bar-name" style="color:#4ecdc4">Fibre</span>
+              <span class="macro-bar-val" id="bar-fibre-val">0g</span>
+            </div>
+            <div class="bar-track"><div class="bar-fill" id="bar-fibre" style="width:0%;background:#4ecdc4"></div></div>
+            <div style="font-size:0.7rem;color:var(--text-muted);margin-top:3px" id="bar-fibre-target"></div>
           </div>
         </div>
       </div>
@@ -973,11 +1037,12 @@
               <th>Protein</th>
               <th>Carbs</th>
               <th>Fat</th>
+              <th>Fibre</th>
               <th>Weight</th>
             </tr>
           </thead>
           <tbody id="report-table-body">
-            <tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:28px">Log some entries to see your report</td></tr>
+            <tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:28px">Log some entries to see your report</td></tr>
           </tbody>
         </table>
       </div>
@@ -991,8 +1056,8 @@
 //  CONFIGURATION — Fill these in from your Supabase
 //  project: Settings → API → Project URL & anon key
 // ══════════════════════════════════════════════════════
-const SUPABASE_URL  = 'https://eojgasnlyjwwhmwkzbfq.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVvamdhc25seWp3d2htd2t6YmZxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE2ODY4NDAsImV4cCI6MjA4NzI2Mjg0MH0.kYB6lkNWcXkS8R6IjIz-r6mU7LzL2QqfABr3sees_iI';
+const SUPABASE_URL  = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON = 'YOUR_SUPABASE_ANON_KEY';
 
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
@@ -1003,8 +1068,13 @@ let state = {
   user: null,
   targetCal: null,
   targetWeight: null,
-  foodLog: [],    // today's entries (full history fetched for reports)
-  weightLog: [],  // all weight entries
+  targetProtein: null,
+  targetCarbs: null,
+  targetFat: null,
+  targetFibre: null,
+  foodLog: [],
+  weightLog: [],
+  savedFoods: [],
   reportFilter: '7d',
 };
 
@@ -1050,6 +1120,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
+  // 1. Check for an existing session first — this handles page refresh
   const { data: { session } } = await sb.auth.getSession();
   if (session?.user) {
     state.user = session.user;
@@ -1062,6 +1133,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     setLoading(false);
   }
 
+  // 2. Listen for subsequent auth changes (sign in, sign out, token refresh)
+  //    Ignore INITIAL_SESSION — we already handled it above
   sb.auth.onAuthStateChange(async (event, session) => {
     if (event === 'INITIAL_SESSION') return;
 
@@ -1074,6 +1147,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       state = { user: null, targetCal: null, targetWeight: null, foodLog: [], weightLog: [], reportFilter: '7d' };
       showView('view-auth');
     } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+      // Silently update user reference — no reload needed
       state.user = session.user;
     }
   });
@@ -1153,7 +1227,7 @@ function seedDemoData() {
     d.setDate(today.getDate() - i);
     const dateStr = d.toISOString().slice(0,10);
     const kcals = Math.round(1600 + Math.random() * 800);
-    state.foodLog.push({ id: 'demo-' + i, name: 'Demo entry', kcal: kcals, protein: Math.round(kcals*0.13), carbs: Math.round(kcals*0.11), fat: Math.round(kcals*0.04), log_time: '12:00', log_date: dateStr });
+    state.foodLog.push({ id: 'demo-' + i, name: 'Demo entry', kcal: kcals, protein: Math.round(kcals*0.13), carbs: Math.round(kcals*0.11), fat: Math.round(kcals*0.04), fibre: Math.round(kcals*0.01), log_time: '12:00', log_date: dateStr });
     state.weightLog.push({ id: 'w-' + i, weight: parseFloat((76 - i * 0.3 + (Math.random() - 0.5) * 0.4).toFixed(1)), log_date: dateStr });
   }
 }
@@ -1164,27 +1238,31 @@ function seedDemoData() {
 async function loadUserData() {
   const uid = state.user.id;
 
-  // Load settings
   const { data: settings } = await sb.from('user_settings').select('*').eq('user_id', uid).maybeSingle();
   if (settings) {
-    state.targetCal    = settings.target_cal;
-    state.targetWeight = settings.target_weight;
+    state.targetCal     = settings.target_cal;
+    state.targetWeight  = settings.target_weight;
+    state.targetProtein = settings.target_protein;
+    state.targetCarbs   = settings.target_carbs;
+    state.targetFat     = settings.target_fat;
+    state.targetFibre   = settings.target_fibre;
   }
 
-  // Load ALL food log (needed for reports)
   const { data: food, error: foodErr } = await sb.from('food_log')
-    .select('*')
-    .eq('user_id', uid)
+    .select('*').eq('user_id', uid)
     .order('log_date', { ascending: false })
     .order('created_at', { ascending: true });
   if (!foodErr) state.foodLog = food || [];
 
-  // Load all weight log
   const { data: weight, error: wErr } = await sb.from('weight_log')
-    .select('*')
-    .eq('user_id', uid)
+    .select('*').eq('user_id', uid)
     .order('log_date', { ascending: true });
   if (!wErr) state.weightLog = weight || [];
+
+  const { data: saved, error: sErr } = await sb.from('saved_foods')
+    .select('*').eq('user_id', uid)
+    .order('name', { ascending: true });
+  if (!sErr) state.savedFoods = saved || [];
 }
 
 // ══════════════════════════════════
@@ -1193,9 +1271,13 @@ async function loadUserData() {
 async function saveSettings() {
   if (!state.user || SUPABASE_URL === 'YOUR_SUPABASE_URL') return;
   await sb.from('user_settings').upsert({
-    user_id:       state.user.id,
-    target_cal:    state.targetCal,
-    target_weight: state.targetWeight,
+    user_id:        state.user.id,
+    target_cal:     state.targetCal,
+    target_weight:  state.targetWeight,
+    target_protein: state.targetProtein,
+    target_carbs:   state.targetCarbs,
+    target_fat:     state.targetFat,
+    target_fibre:   state.targetFibre,
   }, { onConflict: 'user_id' });
 }
 
@@ -1247,8 +1329,12 @@ function initApp() {
   document.getElementById('weight-date').textContent = now.toLocaleDateString('en-GB', opts);
   document.getElementById('weight-date-input').value = now.toISOString().slice(0,10);
 
-  if (state.targetCal)    document.getElementById('target-cal-input').value     = state.targetCal;
-  if (state.targetWeight) document.getElementById('weight-target-input').value  = state.targetWeight;
+  if (state.targetCal)     document.getElementById('target-cal-input').value     = state.targetCal;
+  if (state.targetWeight)  document.getElementById('weight-target-input').value  = state.targetWeight;
+  if (state.targetProtein) document.getElementById('target-protein-input').value = state.targetProtein;
+  if (state.targetCarbs)   document.getElementById('target-carbs-input').value   = state.targetCarbs;
+  if (state.targetFat)     document.getElementById('target-fat-input').value     = state.targetFat;
+  if (state.targetFibre)   document.getElementById('target-fibre-input').value   = state.targetFibre;
 
   renderDashboard();
 }
@@ -1260,12 +1346,16 @@ function todayStr() { return new Date().toISOString().slice(0,10); }
 function todayEntries() { return state.foodLog.filter(e => e.log_date === todayStr()); }
 
 async function setTarget() {
-  const val = parseInt(document.getElementById('target-cal-input').value);
-  if (!val || val < 1) return;
-  state.targetCal = val;
+  const cal = parseInt(document.getElementById('target-cal-input').value);
+  if (!cal || cal < 1) { toast('Please enter a calorie target', 'error'); return; }
+  state.targetCal     = cal;
+  state.targetProtein = parseFloat(document.getElementById('target-protein-input').value) || null;
+  state.targetCarbs   = parseFloat(document.getElementById('target-carbs-input').value)   || null;
+  state.targetFat     = parseFloat(document.getElementById('target-fat-input').value)     || null;
+  state.targetFibre   = parseFloat(document.getElementById('target-fibre-input').value)   || null;
   await saveSettings();
   renderDashboard();
-  toast('Calorie target updated ✓', 'success');
+  toast('Targets saved ✓', 'success');
 }
 
 async function logFood() {
@@ -1279,6 +1369,7 @@ async function logFood() {
     protein:  parseFloat(document.getElementById('food-protein').value) || 0,
     carbs:    parseFloat(document.getElementById('food-carbs').value)   || 0,
     fat:      parseFloat(document.getElementById('food-fat').value)     || 0,
+    fibre:    parseFloat(document.getElementById('food-fibre').value)   || 0,
     log_time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
     log_date: todayStr(),
   };
@@ -1294,7 +1385,7 @@ async function logFood() {
     state.foodLog.push({ ...entry, id: Date.now() });
   }
 
-  ['food-name','food-kcal','food-protein','food-carbs','food-fat'].forEach(id => document.getElementById(id).value = '');
+  ['food-name','food-kcal','food-protein','food-carbs','food-fat','food-fibre'].forEach(id => document.getElementById(id).value = '');
   renderDashboard();
   toast('Entry logged ✓', 'success');
 }
@@ -1308,12 +1399,92 @@ async function removeEntry(id) {
   renderDashboard();
 }
 
+// ══════════════════════════════════
+// SAVED FOODS
+// ══════════════════════════════════
+function toggleSavedFoods() {
+  const panel = document.getElementById('saved-foods-panel');
+  const isHidden = panel.style.display === 'none' || !panel.style.display;
+  panel.style.display = isHidden ? '' : 'none';
+  if (isHidden) renderSavedFoods();
+}
+
+function renderSavedFoods() {
+  const list = document.getElementById('saved-foods-list');
+  if (!state.savedFoods.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:14px">No saved foods yet — fill in the form and hit 💾 Save</div>';
+    return;
+  }
+  list.innerHTML = state.savedFoods.map(f => `
+    <div class="saved-food-item">
+      <div class="sfi-name">${f.name}</div>
+      <div class="sfi-meta">${f.kcal} kcal${f.protein ? ' · P'+f.protein+'g' : ''}${f.carbs ? ' · C'+f.carbs+'g' : ''}${f.fat ? ' · F'+f.fat+'g' : ''}${f.fibre ? ' · Fi'+f.fibre+'g' : ''}</div>
+      <button class="btn-use" onclick="populateFromSaved('${f.id}')">Use</button>
+      <button class="btn-del-saved" onclick="deleteSavedFood('${f.id}')" title="Delete">✕</button>
+    </div>
+  `).join('');
+}
+
+async function saveFood() {
+  const name  = document.getElementById('food-name').value.trim();
+  const kcal  = parseInt(document.getElementById('food-kcal').value) || 0;
+  if (!name || !kcal) { toast('Enter a name and calories first', 'error'); return; }
+
+  const entry = {
+    name,
+    kcal,
+    protein: parseFloat(document.getElementById('food-protein').value) || 0,
+    carbs:   parseFloat(document.getElementById('food-carbs').value)   || 0,
+    fat:     parseFloat(document.getElementById('food-fat').value)     || 0,
+    fibre:   parseFloat(document.getElementById('food-fibre').value)   || 0,
+  };
+
+  if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    const { data, error } = await sb.from('saved_foods')
+      .insert({ ...entry, user_id: state.user.id })
+      .select().single();
+    if (error) { toast('Failed to save food', 'error'); return; }
+    state.savedFoods.push(data);
+    state.savedFoods.sort((a, b) => a.name.localeCompare(b.name));
+  } else {
+    state.savedFoods.push({ ...entry, id: 'saved-' + Date.now() });
+    state.savedFoods.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  toast(`"${name}" saved ✓`, 'success');
+  renderSavedFoods();
+}
+
+function populateFromSaved(id) {
+  const food = state.savedFoods.find(f => String(f.id) === String(id));
+  if (!food) return;
+  document.getElementById('food-name').value    = food.name;
+  document.getElementById('food-kcal').value    = food.kcal;
+  document.getElementById('food-protein').value = food.protein || '';
+  document.getElementById('food-carbs').value   = food.carbs   || '';
+  document.getElementById('food-fat').value     = food.fat     || '';
+  document.getElementById('food-fibre').value   = food.fibre   || '';
+  document.getElementById('saved-foods-panel').style.display = 'none';
+  toast(`"${food.name}" loaded — hit + Log to add it`, 'success');
+}
+
+async function deleteSavedFood(id) {
+  if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    const { error } = await sb.from('saved_foods').delete().eq('id', id).eq('user_id', state.user.id);
+    if (error) { toast('Failed to delete saved food', 'error'); return; }
+  }
+  state.savedFoods = state.savedFoods.filter(f => String(f.id) !== String(id));
+  renderSavedFoods();
+  toast('Removed from saved foods', 'success');
+}
+
 function renderDashboard() {
   const entries  = todayEntries();
   const consumed = entries.reduce((s, e) => s + e.kcal, 0);
   const protein  = entries.reduce((s, e) => s + (e.protein || 0), 0);
-  const carbs    = entries.reduce((s, e) => s + (e.carbs || 0), 0);
-  const fat      = entries.reduce((s, e) => s + (e.fat || 0), 0);
+  const carbs    = entries.reduce((s, e) => s + (e.carbs   || 0), 0);
+  const fat      = entries.reduce((s, e) => s + (e.fat     || 0), 0);
+  const fibre    = entries.reduce((s, e) => s + (e.fibre   || 0), 0);
   const target   = state.targetCal;
 
   // Ring
@@ -1328,16 +1499,22 @@ function renderDashboard() {
   document.getElementById('stat-remaining').textContent = target ? Math.max(0, target - consumed).toLocaleString() : '—';
   document.getElementById('stat-target').textContent    = target ? target.toLocaleString() : '—';
 
-  // Macro bars
-  const maxProtein = target ? target * 0.075 : 150;
-  const maxCarbs   = target ? target * 0.13  : 250;
-  const maxFat     = target ? target * 0.035 : 70;
-  document.getElementById('bar-protein').style.width  = Math.min(protein / maxProtein * 100, 100) + '%';
-  document.getElementById('bar-carbs').style.width    = Math.min(carbs   / maxCarbs   * 100, 100) + '%';
-  document.getElementById('bar-fat').style.width      = Math.min(fat     / maxFat     * 100, 100) + '%';
-  document.getElementById('bar-protein-val').textContent = protein.toFixed(1) + 'g';
-  document.getElementById('bar-carbs-val').textContent   = carbs.toFixed(1)   + 'g';
-  document.getElementById('bar-fat-val').textContent     = fat.toFixed(1)     + 'g';
+  // Macro bars — use set targets if available, else sensible fallbacks
+  const maxProtein = state.targetProtein || (target ? target * 0.075 : 150);
+  const maxCarbs   = state.targetCarbs   || (target ? target * 0.13  : 250);
+  const maxFat     = state.targetFat     || (target ? target * 0.035 : 70);
+  const maxFibre   = state.targetFibre   || 30;
+
+  function setBar(id, valId, targetId, val, max, suffix='g') {
+    document.getElementById(id).style.width         = Math.min(val / max * 100, 100) + '%';
+    document.getElementById(valId).textContent       = val.toFixed(1) + suffix;
+    const tEl = document.getElementById(targetId);
+    if (tEl) tEl.textContent = max ? `${val.toFixed(0)} / ${max}${suffix}` : '';
+  }
+  setBar('bar-protein', 'bar-protein-val', 'bar-protein-target', protein, maxProtein);
+  setBar('bar-carbs',   'bar-carbs-val',   'bar-carbs-target',   carbs,   maxCarbs);
+  setBar('bar-fat',     'bar-fat-val',     'bar-fat-target',     fat,     maxFat);
+  setBar('bar-fibre',   'bar-fibre-val',   'bar-fibre-target',   fibre,   maxFibre);
 
   // Log list
   const list = document.getElementById('food-log-list');
@@ -1352,6 +1529,7 @@ function renderDashboard() {
       ${e.protein ? `<div class="log-item-macro">P ${e.protein}g</div>` : ''}
       ${e.carbs   ? `<div class="log-item-macro">C ${e.carbs}g</div>`   : ''}
       ${e.fat     ? `<div class="log-item-macro">F ${e.fat}g</div>`     : ''}
+      ${e.fibre   ? `<div class="log-item-macro">Fi ${e.fibre}g</div>`  : ''}
       <div class="log-item-kcal">${e.kcal.toLocaleString()} kcal</div>
       <button class="btn-remove" onclick="removeEntry('${e.id}')">✕</button>
     </div>
@@ -1486,13 +1664,14 @@ function renderReports() {
   while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate() + 1); }
 
   const byDate = {};
-  dates.forEach(d => byDate[d] = { kcal: 0, protein: 0, carbs: 0, fat: 0, count: 0 });
+  dates.forEach(d => byDate[d] = { kcal: 0, protein: 0, carbs: 0, fat: 0, fibre: 0, count: 0 });
   state.foodLog.forEach(e => {
     if (e.log_date >= from && e.log_date <= to && byDate[e.log_date] !== undefined) {
       byDate[e.log_date].kcal    += e.kcal;
       byDate[e.log_date].protein += (e.protein || 0);
       byDate[e.log_date].carbs   += (e.carbs   || 0);
       byDate[e.log_date].fat     += (e.fat     || 0);
+      byDate[e.log_date].fibre   += (e.fibre   || 0);
       byDate[e.log_date].count++;
     }
   });
@@ -1529,10 +1708,11 @@ function renderReports() {
       <td>${row.protein > 0 ? row.protein.toFixed(1) + 'g' : '—'}</td>
       <td>${row.carbs   > 0 ? row.carbs.toFixed(1)   + 'g' : '—'}</td>
       <td>${row.fat     > 0 ? row.fat.toFixed(1)     + 'g' : '—'}</td>
+      <td>${row.fibre   > 0 ? row.fibre.toFixed(1)   + 'g' : '—'}</td>
       <td>${weightByDate[d] ? weightByDate[d] + ' kg' : '—'}</td>
     </tr>`;
   });
-  tbody.innerHTML = rows.join('') || '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:28px">No data for this period</td></tr>';
+  tbody.innerHTML = rows.join('') || '<tr><td colspan="9" style="text-align:center;color:var(--text-muted);padding:28px">No data for this period</td></tr>';
 }
 
 // ══════════════════════════════════
