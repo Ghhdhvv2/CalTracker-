@@ -277,32 +277,6 @@
 
   .dash-right { display: flex; flex-direction: column; gap: 16px; }
 
-  /* Target calories card */
-  .target-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 22px 26px;
-  }
-  .card-title { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 14px; }
-
-  .target-row { display: flex; gap: 12px; align-items: flex-end; }
-  .target-row .field-group { flex: 1; margin-bottom: 0; }
-  .btn-set {
-    padding: 13px 20px;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 0.88rem;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-    transition: all 0.2s;
-  }
-  .btn-set:hover { border-color: var(--accent); color: var(--accent); }
-
   /* Log Entry */
   .log-card {
     background: var(--surface);
@@ -345,6 +319,32 @@
   .bar-protein { background: var(--blue); }
   .bar-carbs { background: var(--amber); }
   .bar-fat { background: var(--purple); }
+
+    /* Target calories card */
+  .target-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 26px;
+  }
+  .card-title { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 14px; }
+
+  .target-row { display: flex; gap: 12px; align-items: flex-end; }
+  .target-row .field-group { flex: 1; margin-bottom: 0; }
+  .btn-set {
+    padding: 13px 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .btn-set:hover { border-color: var(--accent); color: var(--accent); }
 
   /* Food Log table */
   .food-log-list { display: flex; flex-direction: column; gap: 8px; }
