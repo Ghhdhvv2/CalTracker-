@@ -263,6 +263,35 @@
     .set-input { padding:12px 8px; font-size:1rem; }
     .workout-type-row .field-group { margin-left:0 !important; width:100%; }
   }
+
+  /* ── CALENDAR ── */
+  .cal-header { display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .cal-range { font-weight:600; font-size:0.95rem; min-width:170px; text-align:center; }
+  .cal-legend { display:flex; gap:14px; flex-wrap:wrap; font-size:0.75rem; color:var(--text-muted); margin-bottom:16px; align-items:center; }
+  .cal-legend span { display:inline-flex; align-items:center; gap:5px; }
+  .cal-strip { display:grid; grid-template-columns:repeat(7,1fr); gap:8px; margin-bottom:20px; }
+  .cal-day { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 6px; min-height:84px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:6px; transition:all 0.15s; }
+  .cal-day:hover { border-color:var(--accent); }
+  .cal-day.today { border-color:var(--accent); }
+  .cal-day.selected { background:var(--accent-glow); border-color:var(--accent); }
+  .cal-dow { font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); }
+  .cal-dom { font-size:1.05rem; font-weight:600; }
+  .cal-day.today .cal-dom { color:var(--accent); }
+  .cal-markers { display:flex; gap:3px; flex-wrap:wrap; justify-content:center; margin-top:auto; min-height:8px; }
+  .cal-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .cal-dot.dot-upper { background:var(--blue); }
+  .cal-dot.dot-lower { background:var(--purple); }
+  .cal-dot.dot-muay { background:var(--amber); }
+  .cal-dot.dot-food { background:var(--accent); }
+  .cal-detail { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:22px 26px; }
+  .cal-detail-empty { color:var(--text-muted); font-size:0.88rem; text-align:center; padding:28px; }
+  .cal-section-label { font-size:0.78rem; font-weight:600; color:var(--text-muted); letter-spacing:0.06em; text-transform:uppercase; margin:18px 0 10px; }
+  @media (max-width:768px){
+    .cal-strip { gap:4px; }
+    .cal-day { padding:8px 2px; min-height:72px; }
+    .cal-dom { font-size:0.95rem; }
+    .cal-dow { font-size:0.6rem; }
+  }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -306,6 +335,7 @@
       <div class="nav-links">
         <button class="nav-link active" onclick="switchPage('dashboard')"><span class="nav-icon">🥗</span><span>Dashboard</span></button>
         <button class="nav-link" onclick="switchPage('workouts')"><span class="nav-icon">💪</span><span>Workout</span></button>
+        <button class="nav-link" onclick="switchPage('calendar')"><span class="nav-icon">📅</span><span>Calendar</span></button>
         <button class="nav-link" onclick="switchPage('weight')"><span class="nav-icon">⚖️</span><span>Weight</span></button>
         <button class="nav-link" onclick="switchPage('reports')"><span class="nav-icon">📊</span><span>Reports</span></button>
       </div>
@@ -317,6 +347,7 @@
     <nav class="bottom-nav" id="bottom-nav">
       <button class="bottom-nav-btn active" onclick="switchPage('dashboard')" id="bnav-dashboard"><span class="bnav-icon">🥗</span>Dashboard</button>
       <button class="bottom-nav-btn" onclick="switchPage('workouts')" id="bnav-workouts"><span class="bnav-icon">💪</span>Workout</button>
+      <button class="bottom-nav-btn" onclick="switchPage('calendar')" id="bnav-calendar"><span class="bnav-icon">📅</span>Calendar</button>
       <button class="bottom-nav-btn" onclick="switchPage('weight')" id="bnav-weight"><span class="bnav-icon">⚖️</span>Weight</button>
       <button class="bottom-nav-btn" onclick="switchPage('reports')" id="bnav-reports"><span class="bnav-icon">📊</span>Reports</button>
     </nav>
@@ -474,6 +505,25 @@
       </div>
     </div>
 
+    <!-- CALENDAR PAGE -->
+    <div id="page-calendar" class="page-content" style="display:none">
+      <div class="page-header"><div class="page-title">Calendar</div><div class="page-date">Your week at a glance</div></div>
+      <div class="cal-header">
+        <button class="date-nav-btn" onclick="calShiftWeek(-1)" title="Previous week">‹</button>
+        <div class="cal-range" id="cal-range">—</div>
+        <button class="date-nav-btn" onclick="calShiftWeek(1)" title="Next week">›</button>
+        <button class="date-nav-today-btn" onclick="calThisWeek()">This week</button>
+      </div>
+      <div class="cal-legend">
+        <span><span class="cal-dot dot-upper"></span>Upper</span>
+        <span><span class="cal-dot dot-lower"></span>Lower</span>
+        <span><span class="cal-dot dot-muay"></span>Muay Thai</span>
+        <span><span class="cal-dot dot-food"></span>Food logged</span>
+      </div>
+      <div class="cal-strip" id="cal-strip"></div>
+      <div class="cal-detail" id="cal-detail"><div class="cal-detail-empty">Tap a day to see its workouts and food</div></div>
+    </div>
+
     <!-- WEIGHT PAGE -->
     <div id="page-weight" class="page-content" style="display:none">
       <div class="page-header"><div class="page-title">Weight Tracker</div><div class="page-date" id="weight-date"></div></div>
@@ -554,6 +604,7 @@ let state = {
   reportFilter: '7d',
   viewDate: null, // date string YYYY-MM-DD currently shown on dashboard
   exercises: [], workouts: [], exerciseSets: [], currentSession: null,
+  calWeekStart: null, calSelectedDate: null,
 };
 
 // ── HELPERS ──────────────────────────────────────────
@@ -674,7 +725,7 @@ window.addEventListener('DOMContentLoaded', async () => {
       try { await loadUserData(); } catch(e) { toast('Failed to load data — please refresh','error'); }
       showView('view-app'); initApp(); setLoading(false);
     } else if (event === 'SIGNED_OUT') {
-      state = {user:null,targetCal:null,targetWeight:null,targetProtein:null,targetCarbs:null,targetFat:null,targetFibre:null,foodLog:[],weightLog:[],savedFoods:[],reportFilter:'7d',viewDate:todayStr(),exercises:[],workouts:[],exerciseSets:[],currentSession:null};
+      state = {user:null,targetCal:null,targetWeight:null,targetProtein:null,targetCarbs:null,targetFat:null,targetFibre:null,foodLog:[],weightLog:[],savedFoods:[],reportFilter:'7d',viewDate:todayStr(),exercises:[],workouts:[],exerciseSets:[],currentSession:null,calWeekStart:null,calSelectedDate:null};
       showView('view-auth');
     } else if (event === 'TOKEN_REFRESHED' && session?.user) {
       state.user = session.user; // silent refresh
@@ -718,7 +769,7 @@ async function doRegister() {
 }
 async function doLogout() {
   if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') { await sb.auth.signOut(); }
-  else { state={user:null,targetCal:null,targetWeight:null,targetProtein:null,targetCarbs:null,targetFat:null,targetFibre:null,foodLog:[],weightLog:[],savedFoods:[],reportFilter:'7d',viewDate:todayStr(),exercises:[],workouts:[],exerciseSets:[],currentSession:null}; showView('view-auth'); }
+  else { state={user:null,targetCal:null,targetWeight:null,targetProtein:null,targetCarbs:null,targetFat:null,targetFibre:null,foodLog:[],weightLog:[],savedFoods:[],reportFilter:'7d',viewDate:todayStr(),exercises:[],workouts:[],exerciseSets:[],currentSession:null,calWeekStart:null,calSelectedDate:null}; showView('view-auth'); }
 }
 function loginDemoUser(name, email) {
   state.user = {id:'demo-'+email, user_metadata:{full_name:name}, email};
@@ -768,12 +819,13 @@ async function saveSettings() {
 // ── VIEWS ──────────────────────────────────────────────
 function showView(id) { document.querySelectorAll('.view').forEach(v=>v.classList.remove('active')); document.getElementById(id).classList.add('active'); }
 function switchPage(page) {
-  ['dashboard','workouts','weight','reports'].forEach(p=>{ document.getElementById('page-'+p).style.display = p===page?'':'none'; });
-  document.querySelectorAll('.nav-link').forEach((l,i)=>l.classList.toggle('active',['dashboard','workouts','weight','reports'][i]===page));
-  ['dashboard','workouts','weight','reports'].forEach(p=>{ const b=document.getElementById('bnav-'+p); if(b) b.classList.toggle('active',p===page); });
+  ['dashboard','workouts','calendar','weight','reports'].forEach(p=>{ document.getElementById('page-'+p).style.display = p===page?'':'none'; });
+  document.querySelectorAll('.nav-link').forEach((l,i)=>l.classList.toggle('active',['dashboard','workouts','calendar','weight','reports'][i]===page));
+  ['dashboard','workouts','calendar','weight','reports'].forEach(p=>{ const b=document.getElementById('bnav-'+p); if(b) b.classList.toggle('active',p===page); });
   if (page==='reports') renderReports();
   if (page==='weight') renderWeightPage();
   if (page==='workouts') renderWorkouts();
+  if (page==='calendar') renderCalendar();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function switchAuthTab(tab) {
@@ -1183,8 +1235,74 @@ function drawProgressChart(exId){
   drawLineChart('chart-progress', dates.map(formatDateShort), dates.map(d=>+byDate[d].toFixed(1)), 'var(--accent)');
 }
 
+// ── CALENDAR ───────────────────────────────────────────
+function weekStartOf(dateStr){ const d=new Date(dateStr+'T12:00:00'); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); return d.toISOString().slice(0,10); }
+function addDays(dateStr,n){ const d=new Date(dateStr+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+
+function renderCalendar(){
+  if(!state.calWeekStart) state.calWeekStart=weekStartOf(todayStr());
+  if(!state.calSelectedDate) state.calSelectedDate=todayStr();
+  renderCalStrip();
+  renderCalDetail();
+}
+function calShiftWeek(delta){ state.calWeekStart=addDays(state.calWeekStart, delta*7); renderCalStrip(); }
+function calThisWeek(){ state.calWeekStart=weekStartOf(todayStr()); state.calSelectedDate=todayStr(); renderCalendar(); }
+function calSelectDay(d){ state.calSelectedDate=d; renderCalStrip(); renderCalDetail(); }
+
+function renderCalStrip(){
+  const strip=document.getElementById('cal-strip'); if(!strip) return;
+  const start=state.calWeekStart, end=addDays(start,6);
+  const rangeEl=document.getElementById('cal-range'); if(rangeEl) rangeEl.textContent=`${formatDateShort(start)} – ${formatDateShort(end)}`;
+  const dows=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  let html='';
+  for(let i=0;i<7;i++){
+    const d=addDays(start,i);
+    const workouts=state.workouts.filter(w=>w.log_date===d);
+    const hasFood=state.foodLog.some(e=>e.log_date===d);
+    const dots=workouts.map(w=>{const c=w.name==='Upper'?'dot-upper':w.name==='Lower'?'dot-lower':'dot-muay';return `<span class="cal-dot ${c}"></span>`;}).join('') + (hasFood?'<span class="cal-dot dot-food"></span>':'');
+    const cls=['cal-day']; if(d===todayStr()) cls.push('today'); if(d===state.calSelectedDate) cls.push('selected');
+    html+=`<div class="${cls.join(' ')}" onclick="calSelectDay('${d}')">
+      <span class="cal-dow">${dows[i]}</span>
+      <span class="cal-dom">${parseInt(d.slice(8,10),10)}</span>
+      <span class="cal-markers">${dots}</span>
+    </div>`;
+  }
+  strip.innerHTML=html;
+}
+
+function renderCalDetail(){
+  const el=document.getElementById('cal-detail'); if(!el) return;
+  const d=state.calSelectedDate;
+  if(!d){ el.innerHTML='<div class="cal-detail-empty">Tap a day to see its workouts and food</div>'; return; }
+  const workouts=state.workouts.filter(w=>w.log_date===d);
+  const food=state.foodLog.filter(e=>e.log_date===d);
+  const exName={}; state.exercises.forEach(e=>exName[e.id]=e.name);
+  let html=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+      <div class="page-title" style="font-size:1.3rem">${formatDate(d)}</div>
+      <button class="btn-set" onclick="jumpToDate('${d}');switchPage('dashboard');" style="font-size:0.8rem;padding:7px 12px">Open on Dashboard →</button>
+    </div>`;
+  html+='<div class="cal-section-label">Workouts</div>';
+  if(!workouts.length){ html+='<div style="color:var(--text-muted);font-size:0.85rem">No sessions logged</div>'; }
+  else {
+    html+=workouts.map(w=>{
+      const sets=state.exerciseSets.filter(s=>String(s.workout_id)===String(w.id));
+      let summary;
+      if(w.name==='Muay Thai'||!sets.length){ summary=w.name==='Muay Thai'?'<span class="wh-muay">🥊 Session complete</span>':'<span style="color:var(--text-muted)">No sets recorded</span>'; }
+      else { const byEx={}; sets.forEach(s=>{const k=s.exercise_id; if(!byEx[k]||e1rm(s.weight,s.reps)>e1rm(byEx[k].weight,byEx[k].reps)) byEx[k]=s;}); summary=Object.entries(byEx).map(([k,s])=>`<span class="wh-set">${exName[k]||'?'} ${(+s.weight)}×${s.reps}</span>`).join(''); }
+      const tag=w.name||'Workout'; const tagClass=tag==='Upper'?'tag-upper':tag==='Lower'?'tag-lower':'tag-muay';
+      return `<div class="workout-history-item"><div class="wh-top"><span class="wh-tag ${tagClass}">${tag}</span></div><div class="wh-summary">${summary}</div></div>`;
+    }).join('');
+  }
+  html+='<div class="cal-section-label">Food</div>';
+  if(!food.length){ html+='<div style="color:var(--text-muted);font-size:0.85rem">No entries logged</div>'; }
+  else {
+    html+='<div class="food-log-list">'+food.map(e=>`<div class="log-item"><div class="log-item-name">${e.name}</div>${e.protein?`<div class="log-item-macro">P ${e.protein}g</div>`:''}${e.carbs?`<div class="log-item-macro">C ${e.carbs}g</div>`:''}${e.fat?`<div class="log-item-macro">F ${e.fat}g</div>`:''}<div class="log-item-kcal">${(e.kcal||0).toLocaleString()} kcal</div></div>`).join('')+'</div>';
+    html+=`<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px">${food.length} entr${food.length===1?'y':'ies'} logged</div>`;
+  }
+  el.innerHTML=html;
+}
+
 window.addEventListener('resize',()=>{const active=document.querySelector('[id^="page-"]:not([style*="display: none"])');if(!active)return;if(active.id==='page-reports')renderReports();if(active.id==='page-workouts'){const sel=document.getElementById('progress-exercise');if(sel)drawProgressChart(sel.value);}});
 </script>
 </body>
-</html>
 </html>
