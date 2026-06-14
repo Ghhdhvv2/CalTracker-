@@ -76,6 +76,10 @@
   .past-day-banner-text strong { color: var(--accent); }
   .btn-copy-day { padding: 8px 18px; background: var(--accent); border: none; border-radius: var(--radius-sm); color: #0e0f0e; font-family: 'DM Sans', sans-serif; font-size: 0.82rem; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
   .btn-copy-day:hover { background: #bef080; }
+  .past-day-banner.future { background: rgba(99,180,224,0.06); border-color: rgba(99,180,224,0.25); }
+  .past-day-banner.future .past-day-banner-text strong { color: var(--blue); }
+  .past-day-banner.future .btn-copy-day { background: var(--blue); }
+  .past-day-banner.future .btn-copy-day:hover { background: #7ec4ec; }
 
   /* RING + SUMMARY */
   .dash-top { display: grid; grid-template-columns: auto 1fr; gap: 24px; margin-bottom: 28px; align-items: start; }
@@ -286,6 +290,15 @@
   .cal-detail { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:22px 26px; }
   .cal-detail-empty { color:var(--text-muted); font-size:0.88rem; text-align:center; padding:28px; }
   .cal-section-label { font-size:0.78rem; font-weight:600; color:var(--text-muted); letter-spacing:0.06em; text-transform:uppercase; margin:18px 0 10px; }
+  .cal-item-controls { display:flex; gap:8px; align-items:center; margin-top:10px; flex-wrap:wrap; }
+  .cal-mini-btn { padding:5px 10px; font-size:0.74rem; border-radius:6px; background:var(--surface); border:1px solid var(--border); color:var(--text-muted); cursor:pointer; font-family:'DM Sans',sans-serif; transition:all 0.2s; }
+  .cal-mini-btn:hover { border-color:var(--accent); color:var(--accent); }
+  .cal-food-edit { background:var(--surface2); border:1px solid var(--accent); border-radius:var(--radius-sm); padding:12px; margin-bottom:8px; }
+  .cal-add-form { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; margin-bottom:10px; }
+  .cfe-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:6px; margin-top:8px; }
+  .cal-add-form .cfe-grid { margin-top:0; }
+  .cal-edit-actions { display:flex; gap:8px; margin-top:8px; }
+  @media (max-width:768px){ .cfe-grid { grid-template-columns:repeat(3,1fr); } }
   @media (max-width:768px){
     .cal-strip { gap:4px; }
     .cal-day { padding:8px 2px; min-height:72px; }
@@ -370,11 +383,8 @@
         <button class="date-nav-today-btn" id="btn-go-today" onclick="goToToday()" style="display:none">← Today</button>
       </div>
 
-      <!-- PAST DAY BANNER (NEW) -->
-      <div class="past-day-banner" id="past-day-banner">
-        <span class="past-day-banner-text">Viewing <strong id="past-day-label">—</strong> — read-only</span>
-        <button class="btn-copy-day" onclick="copyDayToToday()">📋 Copy all to Today</button>
-      </div>
+      <!-- DATE BANNER (past = read-only, future = planning) -->
+      <div class="past-day-banner" id="past-day-banner"></div>
 
       <div class="dash-top">
         <div class="calorie-ring-card">
@@ -610,6 +620,9 @@ let state = {
 // ── HELPERS ──────────────────────────────────────────
 function todayStr() { return new Date().toISOString().slice(0,10); }
 function isViewingToday() { return state.viewDate === todayStr(); }
+function isPastDate(d) { return d < todayStr(); }
+function isFutureDate(d) { return d > todayStr(); }
+function nowTime() { return new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}); }
 function formatDate(d) { return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); }
 function formatDateShort(d) { return new Date(d+'T12:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'}); }
 function shake(el) { el.style.animation='none'; setTimeout(()=>{el.style.animation='shake 0.4s ease';},10); }
@@ -636,16 +649,13 @@ function setLoading(show) {
 function shiftViewDate(delta) {
   const d = new Date(state.viewDate+'T12:00:00');
   d.setDate(d.getDate()+delta);
-  const next = d.toISOString().slice(0,10);
-  if (next > todayStr()) return; // can't go to future
-  state.viewDate = next;
+  state.viewDate = d.toISOString().slice(0,10);
   syncDateNav();
   renderDashboard();
 }
 
 function jumpToDate(val) {
   if (!val) return;
-  if (val > todayStr()) val = todayStr();
   state.viewDate = val;
   syncDateNav();
   renderDashboard();
@@ -658,7 +668,9 @@ function goToToday() {
 }
 
 function syncDateNav() {
-  const isToday = isViewingToday();
+  const past    = isPastDate(state.viewDate);
+  const future  = isFutureDate(state.viewDate);
+  const isToday = !past && !future;
   const label   = document.getElementById('date-nav-label');
   const picker  = document.getElementById('date-picker');
   const nextBtn = document.getElementById('btn-nav-next');
@@ -670,16 +682,58 @@ function syncDateNav() {
   const headingEl= document.getElementById('food-log-heading');
 
   picker.value = state.viewDate;
-  // Update label text (first text node)
   label.firstChild.nodeValue = isToday ? 'Today' : formatDateShort(state.viewDate);
-  nextBtn.disabled = isToday;
+  nextBtn.disabled = false; // future planning now allowed
   todayBtn.style.display = isToday ? 'none' : '';
+  todayBtn.textContent   = future ? 'Today →' : '← Today';
+
   banner.classList.toggle('show', !isToday);
-  if (!isToday) document.getElementById('past-day-label').textContent = formatDate(state.viewDate);
-  logCard.style.display  = isToday ? '' : 'none';
-  hintCard.style.display = isToday ? 'none' : '';
-  titleEl.textContent    = isToday ? "Today's Log" : formatDate(state.viewDate);
-  headingEl.textContent  = isToday ? "Today's Entries" : `Entries for ${formatDateShort(state.viewDate)}`;
+  banner.classList.toggle('future', future);
+  if (past) {
+    banner.innerHTML = `<span class="past-day-banner-text">Viewing <strong>${formatDate(state.viewDate)}</strong> — read-only</span>
+      <button class="btn-copy-day" onclick="copyDayToToday()">📋 Copy all to Today</button>`;
+  } else if (future) {
+    banner.innerHTML = `<span class="past-day-banner-text">Planning ahead for <strong>${formatDate(state.viewDate)}</strong> — add the meals you intend to eat.</span>
+      <button class="btn-copy-day" onclick="copyTodayToView()">📋 Copy today's meals here</button>`;
+  }
+
+  // Log form is available for today AND future (planning); past stays read-only
+  logCard.style.display  = (isToday || future) ? '' : 'none';
+  hintCard.style.display = past ? '' : 'none';
+  titleEl.textContent    = isToday ? "Today's Log" : (future ? `Plan — ${formatDate(state.viewDate)}` : formatDate(state.viewDate));
+  headingEl.textContent  = isToday ? "Today's Entries" : (future ? `Planned meals — ${formatDateShort(state.viewDate)}` : `Entries for ${formatDateShort(state.viewDate)}`);
+}
+
+// Insert a food entry (shared by logging, planning, copy & calendar add)
+async function insertFoodEntry(entry) {
+  if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    const {data,error} = await sb.from('food_log').insert({...entry,user_id:state.user.id}).select().single();
+    if (error) return null;
+    state.foodLog.push(data); return data;
+  }
+  const rec = {...entry, id: Date.now()+Math.random()};
+  state.foodLog.push(rec); return rec;
+}
+
+// Update an existing food entry
+async function updateFoodEntry(id, fields) {
+  if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+    const {data,error} = await sb.from('food_log').update(fields).eq('id',id).eq('user_id',state.user.id).select().single();
+    if (error) { toast('Failed to update entry','error'); return false; }
+    const i = state.foodLog.findIndex(e=>String(e.id)===String(id));
+    if (i>=0) state.foodLog[i] = data;
+  } else {
+    const i = state.foodLog.findIndex(e=>String(e.id)===String(id));
+    if (i>=0) state.foodLog[i] = {...state.foodLog[i], ...fields};
+  }
+  return true;
+}
+
+// Re-render whichever views are affected by a food change
+function afterDataChange() {
+  renderDashboard();
+  const cp = document.getElementById('page-calendar');
+  if (cp && cp.style.display !== 'none') { renderCalStrip(); renderCalDetail(); }
 }
 
 // Copy all entries from viewed past day into today
@@ -691,18 +745,28 @@ async function copyDayToToday() {
   if (!entries.length) { toast('No entries on this day to copy','error'); return; }
   let copied = 0;
   for (const e of entries) {
-    const newE = { name:e.name, kcal:e.kcal, protein:e.protein||0, carbs:e.carbs||0, fat:e.fat||0, fibre:e.fibre||0,
-      log_time: new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}), log_date:tgt };
-    if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-      const {data,error} = await sb.from('food_log').insert({...newE,user_id:state.user.id}).select().single();
-      if (!error) { state.foodLog.push(data); copied++; }
-    } else {
-      state.foodLog.push({...newE, id: Date.now()+Math.random()}); copied++;
-    }
+    const stored = await insertFoodEntry({ name:e.name, kcal:e.kcal, protein:e.protein||0, carbs:e.carbs||0, fat:e.fat||0, fibre:e.fibre||0, log_time:nowTime(), log_date:tgt });
+    if (stored) copied++;
   }
   toast(`Copied ${copied} entr${copied===1?'y':'ies'} to today ✓`,'success');
   state.viewDate = tgt;
   syncDateNav();
+  renderDashboard();
+}
+
+// Copy today's meals forward into the future day being planned
+async function copyTodayToView() {
+  const tgt = state.viewDate;
+  const src = todayStr();
+  if (tgt === src) return;
+  const entries = state.foodLog.filter(e => e.log_date === src);
+  if (!entries.length) { toast('No meals logged today to copy','error'); return; }
+  let copied = 0;
+  for (const e of entries) {
+    const stored = await insertFoodEntry({ name:e.name, kcal:e.kcal, protein:e.protein||0, carbs:e.carbs||0, fat:e.fat||0, fibre:e.fibre||0, log_time:e.log_time||'', log_date:tgt });
+    if (stored) copied++;
+  }
+  toast(`Copied ${copied} meal${copied===1?'':'s'} into your plan ✓`,'success');
   renderDashboard();
 }
 
@@ -872,14 +936,12 @@ async function logFood() {
   const name = document.getElementById('food-name').value.trim();
   const kcal = parseInt(document.getElementById('food-kcal').value)||0;
   if (!name||!kcal) { toast('Please enter a name and calories','error'); return; }
-  const entry = {name,kcal,protein:parseFloat(document.getElementById('food-protein').value)||0,carbs:parseFloat(document.getElementById('food-carbs').value)||0,fat:parseFloat(document.getElementById('food-fat').value)||0,fibre:parseFloat(document.getElementById('food-fibre').value)||0,log_time:new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}),log_date:todayStr()};
-  if (SUPABASE_URL!=='YOUR_SUPABASE_URL') {
-    const {data,error} = await sb.from('food_log').insert({...entry,user_id:state.user.id}).select().single();
-    if (error) { toast('Failed to save entry','error'); return; }
-    state.foodLog.push(data);
-  } else { state.foodLog.push({...entry,id:Date.now()}); }
+  const entry = {name,kcal,protein:parseFloat(document.getElementById('food-protein').value)||0,carbs:parseFloat(document.getElementById('food-carbs').value)||0,fat:parseFloat(document.getElementById('food-fat').value)||0,fibre:parseFloat(document.getElementById('food-fibre').value)||0,log_time:nowTime(),log_date:state.viewDate};
+  const stored = await insertFoodEntry(entry);
+  if (!stored) { toast('Failed to save entry','error'); return; }
   ['food-name','food-kcal','food-protein','food-carbs','food-fat','food-fibre'].forEach(id=>document.getElementById(id).value='');
-  renderDashboard(); toast('Entry logged ✓','success');
+  renderDashboard();
+  toast(isFutureDate(state.viewDate) ? 'Added to plan ✓' : 'Entry logged ✓','success');
 }
 
 async function removeEntry(id) {
@@ -888,7 +950,7 @@ async function removeEntry(id) {
     if (error) { toast('Failed to delete entry','error'); return; }
   }
   state.foodLog = state.foodLog.filter(e=>e.id!==id);
-  renderDashboard();
+  afterDataChange();
 }
 
 function renderDashboard() {
@@ -917,8 +979,15 @@ function renderDashboard() {
   setBar('bar-fat',    'bar-fat-val',    'bar-fat-target',    fat,    mf);
   setBar('bar-fibre',  'bar-fibre-val',  'bar-fibre-target',  fibre,  mfi);
   const list=document.getElementById('food-log-list');
-  const isPast=!isViewingToday();
-  if (!entries.length) { list.innerHTML=`<div class="empty-state">${isPast?'No entries recorded for this day':'No entries yet — log your first meal above ↑'}</div>`; return; }
+  const past=isPastDate(state.viewDate);
+  const future=isFutureDate(state.viewDate);
+  const editable=!past;
+  if (!entries.length) {
+    const emptyMsg = past ? 'No entries recorded for this day'
+      : future ? 'No meals planned yet — add them above ↑'
+      : 'No entries yet — log your first meal above ↑';
+    list.innerHTML=`<div class="empty-state">${emptyMsg}</div>`; return;
+  }
   list.innerHTML=[...entries].reverse().map(e=>`
     <div class="log-item">
       <div class="log-item-name">${e.name}</div>
@@ -928,7 +997,7 @@ function renderDashboard() {
       ${e.fat    ?`<div class="log-item-macro">F ${e.fat}g</div>`:''}
       ${e.fibre  ?`<div class="log-item-macro">Fi ${e.fibre}g</div>`:''}
       <div class="log-item-kcal">${e.kcal.toLocaleString()} kcal</div>
-      ${!isPast?`<button class="btn-remove" onclick="removeEntry('${e.id}')">✕</button>`:'<div style="width:24px"></div>'}
+      ${editable?`<button class="btn-remove" onclick="removeEntry('${e.id}')">✕</button>`:'<div style="width:24px"></div>'}
     </div>`).join('');
 }
 
@@ -1093,7 +1162,7 @@ function renderWorkouts(){
 }
 function resetSession(type){ state.currentSession={ type:type||null, date:todayStr(), items:[] }; }
 function selectSessionType(type){ state.currentSession.type=type; if(type==='Muay Thai') state.currentSession.items=[]; renderSessionBuilder(); }
-function setSessionDate(val){ if(val) state.currentSession.date = val>todayStr()?todayStr():val; }
+function setSessionDate(val){ if(val) state.currentSession.date = val; }
 function exercisesForDay(day){ return state.exercises.filter(e=>e.muscle_group===day).sort((a,b)=>a.name.localeCompare(b.name)); }
 function addExerciseToSession(exId){
   if(!exId) return;
@@ -1111,14 +1180,15 @@ function renderSessionBuilder(){
   document.querySelectorAll('#workout-type-row .filter-chip').forEach(c=>c.classList.toggle('active', c.dataset.type===cs.type));
   const dateInput=document.getElementById('workout-date'); if(dateInput) dateInput.value=cs.date;
   const body=document.getElementById('workout-builder-body'); if(!body) return;
+  const editBanner = cs.editingId ? `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--accent-glow);border:1px solid var(--accent);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;font-size:0.82rem"><span>Editing a saved session</span><button class="cal-mini-btn" onclick="cancelEditSession()">Cancel edit</button></div>` : '';
   if(!cs.type){ body.innerHTML='<div class="empty-state">Pick a session type above to start.</div>'; return; }
   if(cs.type==='Muay Thai'){
-    body.innerHTML=`<p style="color:var(--text-muted);font-size:0.88rem;line-height:1.6;margin-bottom:16px">Muay Thai sessions are logged as done — no sets to fill in.</p>
-      <button class="btn-log" style="width:100%" onclick="saveMuayThai()">✓ Mark Muay Thai done</button>`;
+    body.innerHTML=editBanner+`<p style="color:var(--text-muted);font-size:0.88rem;line-height:1.6;margin-bottom:16px">Muay Thai sessions are logged as done — no sets to fill in.</p>
+      <button class="btn-log" style="width:100%" onclick="saveMuayThai()">${cs.editingId?'✓ Update Muay Thai':'✓ Mark Muay Thai done'}</button>`;
     return;
   }
   const opts=exercisesForDay(cs.type).map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  let html=`<div class="add-exercise-row">
+  let html=editBanner+`<div class="add-exercise-row">
       <select class="field-input" id="exercise-picker"><option value="">+ Add exercise…</option>${opts}</select>
       <button class="btn-set" onclick="addExerciseToSession(document.getElementById('exercise-picker').value)">Add</button>
     </div>`;
@@ -1142,20 +1212,22 @@ function renderSessionBuilder(){
       });
       html+=`<button class="btn-add-set" onclick="addSet(${i})">+ Add set</button></div>`;
     });
-    html+=`<button class="btn-log" style="width:100%;margin-top:8px" onclick="saveWorkout()">Save ${cs.type} workout</button>`;
+    html+=`<button class="btn-log" style="width:100%;margin-top:8px" onclick="saveWorkout()">${cs.editingId?'Update':'Save'} ${cs.type} workout</button>`;
   }
   body.innerHTML=html;
 }
 
 async function saveMuayThai(){
-  const date=state.currentSession.date||todayStr();
+  const cs=state.currentSession;
+  const date=cs.date||todayStr();
+  if(cs.editingId){ await _removeWorkoutData(cs.editingId); }
   let workout;
   if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
     const {data,error}=await sb.from('workouts').insert({user_id:state.user.id,log_date:date,name:'Muay Thai'}).select().single();
     if(error){toast('Failed to save session','error');return;} workout=data;
   } else { workout={id:'w-'+Date.now(),user_id:state.user.id,log_date:date,name:'Muay Thai',created_at:new Date().toISOString()}; }
   state.workouts.push(workout);
-  toast('Muay Thai logged ✓','success');
+  toast(cs.editingId?'Muay Thai updated ✓':'Muay Thai logged ✓','success');
   resetSession(); renderWorkouts();
 }
 
@@ -1163,6 +1235,7 @@ async function saveWorkout(){
   const cs=state.currentSession; const date=cs.date||todayStr();
   const valid=cs.items.map(it=>({...it, sets: it.sets.filter(s=>(+s.weight)>0 && (+s.reps)>0)})).filter(it=>it.sets.length);
   if(!valid.length){ toast('Add at least one set with weight and reps','error'); return; }
+  if(cs.editingId){ await _removeWorkoutData(cs.editingId); }
   let workout;
   if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
     const {data,error}=await sb.from('workouts').insert({user_id:state.user.id,log_date:date,name:cs.type}).select().single();
@@ -1177,18 +1250,67 @@ async function saveWorkout(){
     const {data,error}=await sb.from('exercise_sets').insert(setRows).select();
     if(error){ toast('Workout saved but sets failed — check connection','error'); } else { state.exerciseSets.push(...data); }
   } else { state.exerciseSets.push(...setRows.map((r,i)=>({...r,id:'s-'+Date.now()+'-'+i}))); }
-  toast(prs.length?`🎉 New PR: ${prs.join(', ')}`:`${cs.type} workout saved ✓`,'success');
+  const doneMsg = cs.editingId ? `${cs.type} workout updated ✓` : `${cs.type} workout saved ✓`;
+  toast(prs.length?`🎉 New PR: ${prs.join(', ')}`:doneMsg,'success');
   resetSession(); renderWorkouts();
 }
 
-async function deleteWorkout(id){
+// Remove a workout's data only (no toast / re-render) — used by delete & edit-replace
+async function _removeWorkoutData(id){
   if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
     const {error}=await sb.from('workouts').delete().eq('id',id).eq('user_id',state.user.id);
-    if(error){toast('Failed to delete','error');return;}
+    if(error) return false;
   }
   state.workouts=state.workouts.filter(w=>String(w.id)!==String(id));
   state.exerciseSets=state.exerciseSets.filter(s=>String(s.workout_id)!==String(id));
-  renderWorkouts(); toast('Workout removed','success');
+  return true;
+}
+
+// Re-render whichever views are affected by a workout change
+function afterWorkoutChange(){
+  const wp=document.getElementById('page-workouts'); if(wp && wp.style.display!=='none') renderWorkouts();
+  const cp=document.getElementById('page-calendar'); if(cp && cp.style.display!=='none'){ renderCalStrip(); renderCalDetail(); }
+}
+
+// Move a session to a different day
+async function rescheduleWorkout(id,newDate){
+  if(!newDate) return;
+  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
+    const {data,error}=await sb.from('workouts').update({log_date:newDate}).eq('id',id).eq('user_id',state.user.id).select().single();
+    if(error){ toast('Failed to reschedule','error'); return; }
+    const i=state.workouts.findIndex(w=>String(w.id)===String(id)); if(i>=0) state.workouts[i]=data;
+  } else {
+    const i=state.workouts.findIndex(w=>String(w.id)===String(id)); if(i>=0) state.workouts[i].log_date=newDate;
+  }
+  toast('Session rescheduled ✓','success'); afterWorkoutChange();
+}
+
+// Load a saved session into the builder for full editing
+function loadWorkoutIntoBuilder(id){
+  const w=state.workouts.find(x=>String(x.id)===String(id)); if(!w) return;
+  let items=[];
+  if(w.name!=='Muay Thai'){
+    const sets=state.exerciseSets.filter(s=>String(s.workout_id)===String(w.id)).sort((a,b)=>(a.set_number||0)-(b.set_number||0));
+    const byEx={};
+    sets.forEach(s=>{
+      const ex=state.exercises.find(e=>String(e.id)===String(s.exercise_id))||{};
+      if(!byEx[s.exercise_id]) byEx[s.exercise_id]={exercise_id:s.exercise_id, name:ex.name||'?', unit:ex.unit||'kg', sets:[]};
+      byEx[s.exercise_id].sets.push({weight:s.weight, reps:s.reps, rpe:s.rpe||''});
+    });
+    items=Object.values(byEx);
+    items.forEach(it=>{ if(!it.sets.length) it.sets.push({weight:'',reps:'',rpe:''}); });
+  }
+  state.currentSession={ type:w.name, date:w.log_date, items, editingId:w.id };
+  switchPage('workouts');
+  toast('Editing session — adjust and Update','info');
+}
+
+function cancelEditSession(){ resetSession(); renderWorkouts(); }
+
+async function deleteWorkout(id){
+  const ok=await _removeWorkoutData(id);
+  if(!ok){ toast('Failed to delete','error'); return; }
+  afterWorkoutChange(); toast('Workout removed','success');
 }
 
 function renderWorkoutHistory(){
@@ -1236,18 +1358,20 @@ function drawProgressChart(exId){
 }
 
 // ── CALENDAR ───────────────────────────────────────────
+let calEditingFoodId=null, calAddOpen=false;
 function weekStartOf(dateStr){ const d=new Date(dateStr+'T12:00:00'); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); return d.toISOString().slice(0,10); }
 function addDays(dateStr,n){ const d=new Date(dateStr+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
 
 function renderCalendar(){
   if(!state.calWeekStart) state.calWeekStart=weekStartOf(todayStr());
   if(!state.calSelectedDate) state.calSelectedDate=todayStr();
+  calEditingFoodId=null; calAddOpen=false;
   renderCalStrip();
   renderCalDetail();
 }
 function calShiftWeek(delta){ state.calWeekStart=addDays(state.calWeekStart, delta*7); renderCalStrip(); }
 function calThisWeek(){ state.calWeekStart=weekStartOf(todayStr()); state.calSelectedDate=todayStr(); renderCalendar(); }
-function calSelectDay(d){ state.calSelectedDate=d; renderCalStrip(); renderCalDetail(); }
+function calSelectDay(d){ state.calSelectedDate=d; calEditingFoodId=null; calAddOpen=false; renderCalStrip(); renderCalDetail(); }
 
 function renderCalStrip(){
   const strip=document.getElementById('cal-strip'); if(!strip) return;
@@ -1277,10 +1401,13 @@ function renderCalDetail(){
   const workouts=state.workouts.filter(w=>w.log_date===d);
   const food=state.foodLog.filter(e=>e.log_date===d);
   const exName={}; state.exercises.forEach(e=>exName[e.id]=e.name);
+
   let html=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px">
       <div class="page-title" style="font-size:1.3rem">${formatDate(d)}</div>
       <button class="btn-set" onclick="jumpToDate('${d}');switchPage('dashboard');" style="font-size:0.8rem;padding:7px 12px">Open on Dashboard →</button>
     </div>`;
+
+  // ── WORKOUTS ──
   html+='<div class="cal-section-label">Workouts</div>';
   if(!workouts.length){ html+='<div style="color:var(--text-muted);font-size:0.85rem">No sessions logged</div>'; }
   else {
@@ -1290,16 +1417,106 @@ function renderCalDetail(){
       if(w.name==='Muay Thai'||!sets.length){ summary=w.name==='Muay Thai'?'<span class="wh-muay">🥊 Session complete</span>':'<span style="color:var(--text-muted)">No sets recorded</span>'; }
       else { const byEx={}; sets.forEach(s=>{const k=s.exercise_id; if(!byEx[k]||e1rm(s.weight,s.reps)>e1rm(byEx[k].weight,byEx[k].reps)) byEx[k]=s;}); summary=Object.entries(byEx).map(([k,s])=>`<span class="wh-set">${exName[k]||'?'} ${(+s.weight)}×${s.reps}</span>`).join(''); }
       const tag=w.name||'Workout'; const tagClass=tag==='Upper'?'tag-upper':tag==='Lower'?'tag-lower':'tag-muay';
-      return `<div class="workout-history-item"><div class="wh-top"><span class="wh-tag ${tagClass}">${tag}</span></div><div class="wh-summary">${summary}</div></div>`;
+      return `<div class="workout-history-item">
+        <div class="wh-top"><span class="wh-tag ${tagClass}">${tag}</span></div>
+        <div class="wh-summary">${summary}</div>
+        <div class="cal-item-controls">
+          <label style="font-size:0.72rem;color:var(--text-muted)">Move to
+            <input type="date" value="${w.log_date}" onchange="rescheduleWorkout('${w.id}',this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-family:'DM Sans',sans-serif;font-size:0.75rem;margin-left:4px">
+          </label>
+          ${w.name!=='Muay Thai'?`<button class="cal-mini-btn" onclick="loadWorkoutIntoBuilder('${w.id}')">✎ Edit sets</button>`:''}
+          <button class="cal-mini-btn" style="color:var(--red)" onclick="deleteWorkout('${w.id}')">✕ Delete</button>
+        </div>
+      </div>`;
     }).join('');
   }
-  html+='<div class="cal-section-label">Food</div>';
+
+  // ── FOOD ──
+  html+=`<div class="cal-section-label" style="display:flex;align-items:center;justify-content:space-between">
+      <span>Food</span>
+      <button class="cal-mini-btn" onclick="calToggleAddFood()">${calAddOpen?'× Close':'+ Add meal'}</button>
+    </div>`;
+
+  if(calAddOpen){
+    html+=`<div class="cal-add-form">
+      <input class="set-input" id="caf-name" placeholder="Food / meal name" style="margin-bottom:8px">
+      <div class="cfe-grid">
+        <input class="set-input" id="caf-kcal" type="number" min="0" placeholder="kcal">
+        <input class="set-input" id="caf-protein" type="number" min="0" placeholder="P (g)">
+        <input class="set-input" id="caf-carbs" type="number" min="0" placeholder="C (g)">
+        <input class="set-input" id="caf-fat" type="number" min="0" placeholder="F (g)">
+        <input class="set-input" id="caf-fibre" type="number" min="0" placeholder="Fi (g)">
+      </div>
+      <div class="cal-edit-actions">
+        <button class="btn-log" style="flex:1" onclick="calAddFood('${d}')">+ Add meal</button>
+        <button class="btn-set" onclick="calToggleAddFood()">Cancel</button>
+      </div>
+    </div>`;
+  }
+
   if(!food.length){ html+='<div style="color:var(--text-muted);font-size:0.85rem">No entries logged</div>'; }
   else {
-    html+='<div class="food-log-list">'+food.map(e=>`<div class="log-item"><div class="log-item-name">${e.name}</div>${e.protein?`<div class="log-item-macro">P ${e.protein}g</div>`:''}${e.carbs?`<div class="log-item-macro">C ${e.carbs}g</div>`:''}${e.fat?`<div class="log-item-macro">F ${e.fat}g</div>`:''}<div class="log-item-kcal">${(e.kcal||0).toLocaleString()} kcal</div></div>`).join('')+'</div>';
+    html+='<div class="food-log-list">'+food.map(e=>{
+      if(String(e.id)===String(calEditingFoodId)){
+        const esc=(e.name||'').replace(/"/g,'&quot;');
+        return `<div class="cal-food-edit">
+          <input class="set-input" id="cfe-name" value="${esc}" placeholder="Name">
+          <div class="cfe-grid">
+            <input class="set-input" id="cfe-kcal" type="number" min="0" value="${e.kcal||''}" placeholder="kcal">
+            <input class="set-input" id="cfe-protein" type="number" min="0" value="${e.protein||''}" placeholder="P">
+            <input class="set-input" id="cfe-carbs" type="number" min="0" value="${e.carbs||''}" placeholder="C">
+            <input class="set-input" id="cfe-fat" type="number" min="0" value="${e.fat||''}" placeholder="F">
+            <input class="set-input" id="cfe-fibre" type="number" min="0" value="${e.fibre||''}" placeholder="Fi">
+          </div>
+          <div class="cal-edit-actions">
+            <button class="btn-log" style="flex:1" onclick="calSaveEditFood('${e.id}')">Save</button>
+            <button class="btn-set" onclick="calCancelEditFood()">Cancel</button>
+          </div>
+        </div>`;
+      }
+      return `<div class="log-item">
+        <div class="log-item-name">${e.name}</div>
+        ${e.protein?`<div class="log-item-macro">P ${e.protein}g</div>`:''}
+        ${e.carbs?`<div class="log-item-macro">C ${e.carbs}g</div>`:''}
+        ${e.fat?`<div class="log-item-macro">F ${e.fat}g</div>`:''}
+        ${e.fibre?`<div class="log-item-macro">Fi ${e.fibre}g</div>`:''}
+        <div class="log-item-kcal">${(e.kcal||0).toLocaleString()} kcal</div>
+        <button class="btn-remove" onclick="calStartEditFood('${e.id}')" title="Edit">✎</button>
+        <button class="btn-remove" onclick="removeEntry('${e.id}')" title="Remove">✕</button>
+      </div>`;
+    }).join('')+'</div>';
     html+=`<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px">${food.length} entr${food.length===1?'y':'ies'} logged</div>`;
   }
   el.innerHTML=html;
+}
+
+// ── Calendar food editing ──
+function calToggleAddFood(){ calAddOpen=!calAddOpen; calEditingFoodId=null; renderCalDetail(); }
+function calStartEditFood(id){ calEditingFoodId=id; calAddOpen=false; renderCalDetail(); }
+function calCancelEditFood(){ calEditingFoodId=null; renderCalDetail(); }
+async function calSaveEditFood(id){
+  const name=document.getElementById('cfe-name').value.trim();
+  const kcal=parseInt(document.getElementById('cfe-kcal').value)||0;
+  if(!name||!kcal){ toast('Enter a name and calories','error'); return; }
+  const fields={ name, kcal,
+    protein:parseFloat(document.getElementById('cfe-protein').value)||0,
+    carbs:parseFloat(document.getElementById('cfe-carbs').value)||0,
+    fat:parseFloat(document.getElementById('cfe-fat').value)||0,
+    fibre:parseFloat(document.getElementById('cfe-fibre').value)||0 };
+  const ok=await updateFoodEntry(id,fields);
+  if(ok){ calEditingFoodId=null; toast('Meal updated ✓','success'); afterDataChange(); }
+}
+async function calAddFood(date){
+  const name=document.getElementById('caf-name').value.trim();
+  const kcal=parseInt(document.getElementById('caf-kcal').value)||0;
+  if(!name||!kcal){ toast('Enter a name and calories','error'); return; }
+  const stored=await insertFoodEntry({ name, kcal,
+    protein:parseFloat(document.getElementById('caf-protein').value)||0,
+    carbs:parseFloat(document.getElementById('caf-carbs').value)||0,
+    fat:parseFloat(document.getElementById('caf-fat').value)||0,
+    fibre:parseFloat(document.getElementById('caf-fibre').value)||0,
+    log_time:nowTime(), log_date:date });
+  if(stored){ calAddOpen=false; toast('Meal added ✓','success'); afterDataChange(); }
 }
 
 window.addEventListener('resize',()=>{const active=document.querySelector('[id^="page-"]:not([style*="display: none"])');if(!active)return;if(active.id==='page-reports')renderReports();if(active.id==='page-workouts'){const sel=document.getElementById('progress-exercise');if(sel)drawProgressChart(sel.value);}});
