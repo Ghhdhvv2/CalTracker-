@@ -252,6 +252,11 @@
   .set-input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
   .btn-add-set { margin-top:4px; width:100%; padding:9px; background:transparent; border:1px dashed var(--border); border-radius:var(--radius-sm); color:var(--text-muted); font-family:'DM Sans',sans-serif; font-size:0.82rem; cursor:pointer; transition:all 0.2s; }
   .btn-add-set:hover { border-color:var(--accent); color:var(--accent); }
+  .ex-mgr-group { font-size:0.72rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin:12px 0 6px; }
+  .ex-row { display:flex; align-items:center; gap:8px; padding:9px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:6px; }
+  .ex-row .ex-name { flex:1; font-size:0.88rem; font-weight:500; }
+  .ex-row .ex-count { font-size:0.72rem; color:var(--text-muted); }
+  .ex-row input.ex-edit-input { flex:1; background:var(--surface); border:1px solid var(--accent); border-radius:6px; color:var(--text); padding:7px 10px; font-family:'DM Sans',sans-serif; font-size:0.88rem; outline:none; }
   .workout-history-item { background:var(--surface2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px 16px; margin-bottom:8px; }
   .wh-top { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
   .wh-tag { font-size:0.72rem; font-weight:700; padding:3px 10px; border-radius:99px; text-transform:uppercase; letter-spacing:0.04em; }
@@ -498,6 +503,25 @@
           </div>
         </div>
         <div id="workout-builder-body"><div class="empty-state">Pick a session type above to start.</div></div>
+      </div>
+
+      <div class="log-card">
+        <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleExerciseManager()">
+          <span>Manage Exercises</span>
+          <span class="cal-mini-btn" id="ex-mgr-toggle">+ Add / edit</span>
+        </div>
+        <div id="exercise-manager" style="display:none;margin-top:14px">
+          <div class="add-exercise-row" style="margin-bottom:6px">
+            <input class="field-input" id="new-ex-name" placeholder="New exercise name (e.g. Cable Fly)" style="flex:1">
+            <select class="field-input" id="new-ex-group" style="width:auto">
+              <option value="Upper">Upper</option>
+              <option value="Lower">Lower</option>
+            </select>
+            <button class="btn-set" onclick="addExercise()">+ Add</button>
+          </div>
+          <div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:14px">New exercises appear in the session picker for that day. Exercises with logged history can be renamed but not deleted.</div>
+          <div id="exercise-manager-list"></div>
+        </div>
       </div>
 
       <div class="reports-grid">
@@ -1159,8 +1183,88 @@ function renderWorkouts(){
   renderSessionBuilder();
   renderWorkoutHistory();
   renderProgressSelector();
+  renderExerciseManager();
 }
 function resetSession(type){ state.currentSession={ type:type||null, date:todayStr(), items:[] }; }
+
+// ── EXERCISE MANAGER ───────────────────────────────────
+let exMgrOpen=false, exEditingId=null;
+function toggleExerciseManager(){
+  exMgrOpen=!exMgrOpen; exEditingId=null;
+  document.getElementById('exercise-manager').style.display=exMgrOpen?'':'none';
+  document.getElementById('ex-mgr-toggle').textContent=exMgrOpen?'× Close':'+ Add / edit';
+  if(exMgrOpen) renderExerciseManager();
+}
+function renderExerciseManager(){
+  const wrap=document.getElementById('exercise-manager-list'); if(!wrap||!exMgrOpen) return;
+  let html='';
+  ['Upper','Lower'].forEach(group=>{
+    const list=state.exercises.filter(e=>e.muscle_group===group).sort((a,b)=>a.name.localeCompare(b.name));
+    html+=`<div class="ex-mgr-group">${group}</div>`;
+    if(!list.length){ html+='<div style="font-size:0.82rem;color:var(--text-muted);margin-bottom:6px">None yet</div>'; return; }
+    html+=list.map(e=>{
+      const n=setsForExercise(e.id).length;
+      if(String(e.id)===String(exEditingId)){
+        return `<div class="ex-row">
+          <input class="ex-edit-input" id="ex-edit-${e.id}" value="${(e.name||'').replace(/"/g,'&quot;')}">
+          <button class="cal-mini-btn" onclick="saveRenameExercise('${e.id}')">Save</button>
+          <button class="cal-mini-btn" onclick="cancelRenameExercise()">Cancel</button>
+        </div>`;
+      }
+      const delBtn = n>0
+        ? `<button class="cal-mini-btn" disabled style="opacity:0.4;cursor:not-allowed" title="Has logged history — rename only">🔒</button>`
+        : `<button class="cal-mini-btn" style="color:var(--red)" onclick="deleteExercise('${e.id}')">✕</button>`;
+      return `<div class="ex-row">
+        <span class="ex-name">${e.name}</span>
+        <span class="ex-count">${n? n+' set'+(n===1?'':'s'):'no history'}</span>
+        <button class="cal-mini-btn" onclick="startRenameExercise('${e.id}')">✎</button>
+        ${delBtn}
+      </div>`;
+    }).join('');
+  });
+  wrap.innerHTML=html;
+}
+async function addExercise(){
+  const name=document.getElementById('new-ex-name').value.trim();
+  const group=document.getElementById('new-ex-group').value;
+  if(!name){ toast('Enter an exercise name','error'); return; }
+  if(state.exercises.some(e=>e.name.toLowerCase()===name.toLowerCase() && e.muscle_group===group)){ toast('That exercise already exists','error'); return; }
+  const row={ name, muscle_group:group, unit:'kg' };
+  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
+    const {data,error}=await sb.from('exercises').insert({...row,user_id:state.user.id}).select().single();
+    if(error){ toast('Failed to add exercise','error'); return; }
+    state.exercises.push(data);
+  } else { state.exercises.push({...row,id:'ex-'+Date.now()}); }
+  document.getElementById('new-ex-name').value='';
+  toast(`"${name}" added ✓`,'success');
+  renderExerciseManager(); renderSessionBuilder(); renderProgressSelector();
+}
+function startRenameExercise(id){ exEditingId=id; renderExerciseManager(); }
+function cancelRenameExercise(){ exEditingId=null; renderExerciseManager(); }
+async function saveRenameExercise(id){
+  const name=document.getElementById('ex-edit-'+id).value.trim();
+  if(!name){ toast('Name cannot be empty','error'); return; }
+  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
+    const {data,error}=await sb.from('exercises').update({name}).eq('id',id).eq('user_id',state.user.id).select().single();
+    if(error){ toast('Failed to rename','error'); return; }
+    const i=state.exercises.findIndex(e=>String(e.id)===String(id)); if(i>=0) state.exercises[i]=data;
+  } else {
+    const i=state.exercises.findIndex(e=>String(e.id)===String(id)); if(i>=0) state.exercises[i].name=name;
+  }
+  exEditingId=null;
+  toast('Renamed ✓','success');
+  renderExerciseManager(); renderSessionBuilder(); renderProgressSelector(); renderWorkoutHistory();
+}
+async function deleteExercise(id){
+  if(setsForExercise(id).length){ toast('This exercise has logged sets — rename it instead','error'); return; }
+  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
+    const {error}=await sb.from('exercises').delete().eq('id',id).eq('user_id',state.user.id);
+    if(error){ toast('Failed to delete','error'); return; }
+  }
+  state.exercises=state.exercises.filter(e=>String(e.id)!==String(id));
+  toast('Exercise removed','success');
+  renderExerciseManager(); renderSessionBuilder(); renderProgressSelector();
+}
 function selectSessionType(type){ state.currentSession.type=type; if(type==='Muay Thai') state.currentSession.items=[]; renderSessionBuilder(); }
 function setSessionDate(val){ if(val) state.currentSession.date = val; }
 function exercisesForDay(day){ return state.exercises.filter(e=>e.muscle_group===day).sort((a,b)=>a.name.localeCompare(b.name)); }
@@ -1236,290 +1340,4 @@ async function saveWorkout(){
   const valid=cs.items.map(it=>({...it, sets: it.sets.filter(s=>(+s.weight)>0 && (+s.reps)>0)})).filter(it=>it.sets.length);
   if(!valid.length){ toast('Add at least one set with weight and reps','error'); return; }
   if(cs.editingId){ await _removeWorkoutData(cs.editingId); }
-  let workout;
-  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
-    const {data,error}=await sb.from('workouts').insert({user_id:state.user.id,log_date:date,name:cs.type}).select().single();
-    if(error){toast('Failed to save workout','error');return;} workout=data;
-  } else { workout={id:'w-'+Date.now(),user_id:state.user.id,log_date:date,name:cs.type,created_at:new Date().toISOString()}; }
-  state.workouts.push(workout);
-  const setRows=[];
-  valid.forEach(it=>it.sets.forEach((s,idx)=>setRows.push({user_id:state.user.id, workout_id:workout.id, exercise_id:it.exercise_id, set_number:idx+1, weight:+s.weight, reps:+s.reps, rpe:s.rpe?+s.rpe:null})));
-  const prs=[];
-  valid.forEach(it=>{ const prev=bestE1rm(it.exercise_id, date); const newBest=Math.max(...it.sets.map(s=>e1rm(+s.weight,+s.reps))); if(prev>0 && newBest>prev+0.01) prs.push(it.name); });
-  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
-    const {data,error}=await sb.from('exercise_sets').insert(setRows).select();
-    if(error){ toast('Workout saved but sets failed — check connection','error'); } else { state.exerciseSets.push(...data); }
-  } else { state.exerciseSets.push(...setRows.map((r,i)=>({...r,id:'s-'+Date.now()+'-'+i}))); }
-  const doneMsg = cs.editingId ? `${cs.type} workout updated ✓` : `${cs.type} workout saved ✓`;
-  toast(prs.length?`🎉 New PR: ${prs.join(', ')}`:doneMsg,'success');
-  resetSession(); renderWorkouts();
-}
-
-// Remove a workout's data only (no toast / re-render) — used by delete & edit-replace
-async function _removeWorkoutData(id){
-  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
-    const {error}=await sb.from('workouts').delete().eq('id',id).eq('user_id',state.user.id);
-    if(error) return false;
-  }
-  state.workouts=state.workouts.filter(w=>String(w.id)!==String(id));
-  state.exerciseSets=state.exerciseSets.filter(s=>String(s.workout_id)!==String(id));
-  return true;
-}
-
-// Re-render whichever views are affected by a workout change
-function afterWorkoutChange(){
-  const wp=document.getElementById('page-workouts'); if(wp && wp.style.display!=='none') renderWorkouts();
-  const cp=document.getElementById('page-calendar'); if(cp && cp.style.display!=='none'){ renderCalStrip(); renderCalDetail(); }
-}
-
-// Move a session to a different day
-async function rescheduleWorkout(id,newDate){
-  if(!newDate) return;
-  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
-    const {data,error}=await sb.from('workouts').update({log_date:newDate}).eq('id',id).eq('user_id',state.user.id).select().single();
-    if(error){ toast('Failed to reschedule','error'); return; }
-    const i=state.workouts.findIndex(w=>String(w.id)===String(id)); if(i>=0) state.workouts[i]=data;
-  } else {
-    const i=state.workouts.findIndex(w=>String(w.id)===String(id)); if(i>=0) state.workouts[i].log_date=newDate;
-  }
-  toast('Session rescheduled ✓','success'); afterWorkoutChange();
-}
-
-// Load a saved session into the builder for full editing
-function loadWorkoutIntoBuilder(id){
-  const w=state.workouts.find(x=>String(x.id)===String(id)); if(!w) return;
-  let items=[];
-  if(w.name!=='Muay Thai'){
-    const sets=state.exerciseSets.filter(s=>String(s.workout_id)===String(w.id)).sort((a,b)=>(a.set_number||0)-(b.set_number||0));
-    const byEx={};
-    sets.forEach(s=>{
-      const ex=state.exercises.find(e=>String(e.id)===String(s.exercise_id))||{};
-      if(!byEx[s.exercise_id]) byEx[s.exercise_id]={exercise_id:s.exercise_id, name:ex.name||'?', unit:ex.unit||'kg', sets:[]};
-      byEx[s.exercise_id].sets.push({weight:s.weight, reps:s.reps, rpe:s.rpe||''});
-    });
-    items=Object.values(byEx);
-    items.forEach(it=>{ if(!it.sets.length) it.sets.push({weight:'',reps:'',rpe:''}); });
-  }
-  state.currentSession={ type:w.name, date:w.log_date, items, editingId:w.id };
-  switchPage('workouts');
-  toast('Editing session — adjust and Update','info');
-}
-
-function cancelEditSession(){ resetSession(); renderWorkouts(); }
-
-async function deleteWorkout(id){
-  const ok=await _removeWorkoutData(id);
-  if(!ok){ toast('Failed to delete','error'); return; }
-  afterWorkoutChange(); toast('Workout removed','success');
-}
-
-function renderWorkoutHistory(){
-  const el=document.getElementById('workout-history-list'); if(!el) return;
-  const list=[...state.workouts].sort((a,b)=> b.log_date.localeCompare(a.log_date) || (b.created_at||'').localeCompare(a.created_at||'')).slice(0,12);
-  if(!list.length){ el.innerHTML='<div class="empty-state">No sessions logged yet</div>'; return; }
-  const exName={}; state.exercises.forEach(e=>exName[e.id]=e.name);
-  el.innerHTML=list.map(w=>{
-    const sets=state.exerciseSets.filter(s=>String(s.workout_id)===String(w.id));
-    let summary;
-    if(w.name==='Muay Thai' || !sets.length){
-      summary = w.name==='Muay Thai' ? '<span class="wh-muay">🥊 Session complete</span>' : '<span style="color:var(--text-muted)">No sets recorded</span>';
-    } else {
-      const byEx={};
-      sets.forEach(s=>{ const k=s.exercise_id; if(!byEx[k]||e1rm(s.weight,s.reps)>e1rm(byEx[k].weight,byEx[k].reps)) byEx[k]=s; });
-      summary=Object.entries(byEx).map(([k,s])=>`<span class="wh-set">${exName[k]||'?'} ${(+s.weight)}×${s.reps}</span>`).join('');
-    }
-    const tag=w.name||'Workout';
-    const tagClass = tag==='Upper'?'tag-upper':tag==='Lower'?'tag-lower':'tag-muay';
-    return `<div class="workout-history-item">
-      <div class="wh-top"><span class="wh-tag ${tagClass}">${tag}</span><span class="wh-date">${formatDate(w.log_date)}</span><button class="btn-remove" onclick="deleteWorkout('${w.id}')" title="Delete session">✕</button></div>
-      <div class="wh-summary">${summary}</div>
-    </div>`;
-  }).join('');
-}
-
-function renderProgressSelector(){
-  const sel=document.getElementById('progress-exercise'); if(!sel) return;
-  const withHistory=state.exercises.filter(e=>setsForExercise(e.id).length).sort((a,b)=>a.name.localeCompare(b.name));
-  const prev=sel.value;
-  sel.innerHTML='<option value="">Select an exercise…</option>'+withHistory.map(e=>`<option value="${e.id}">${e.name}</option>`).join('');
-  if(prev && withHistory.find(e=>String(e.id)===String(prev))){ sel.value=prev; drawProgressChart(prev); } else { drawProgressChart(''); }
-}
-function onProgressExerciseChange(val){ drawProgressChart(val); }
-function drawProgressChart(exId){
-  const wrap=document.getElementById('progress-chart-wrap'); if(!wrap) return;
-  if(!exId){ wrap.innerHTML='<div class="empty-state">Pick an exercise to see your estimated 1RM trend</div>'; return; }
-  const sets=setsForExercise(exId);
-  const byDate={};
-  sets.forEach(s=>{ const v=e1rm(s.weight,s.reps); if(!byDate[s.log_date]||v>byDate[s.log_date]) byDate[s.log_date]=v; });
-  const dates=Object.keys(byDate).sort();
-  if(!dates.length){ wrap.innerHTML='<div class="empty-state">No data yet</div>'; return; }
-  wrap.innerHTML='<canvas id="chart-progress"></canvas>';
-  drawLineChart('chart-progress', dates.map(formatDateShort), dates.map(d=>+byDate[d].toFixed(1)), 'var(--accent)');
-}
-
-// ── CALENDAR ───────────────────────────────────────────
-let calEditingFoodId=null, calAddOpen=false;
-function weekStartOf(dateStr){ const d=new Date(dateStr+'T12:00:00'); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); return d.toISOString().slice(0,10); }
-function addDays(dateStr,n){ const d=new Date(dateStr+'T12:00:00'); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
-
-function renderCalendar(){
-  if(!state.calWeekStart) state.calWeekStart=weekStartOf(todayStr());
-  if(!state.calSelectedDate) state.calSelectedDate=todayStr();
-  calEditingFoodId=null; calAddOpen=false;
-  renderCalStrip();
-  renderCalDetail();
-}
-function calShiftWeek(delta){ state.calWeekStart=addDays(state.calWeekStart, delta*7); renderCalStrip(); }
-function calThisWeek(){ state.calWeekStart=weekStartOf(todayStr()); state.calSelectedDate=todayStr(); renderCalendar(); }
-function calSelectDay(d){ state.calSelectedDate=d; calEditingFoodId=null; calAddOpen=false; renderCalStrip(); renderCalDetail(); }
-
-function renderCalStrip(){
-  const strip=document.getElementById('cal-strip'); if(!strip) return;
-  const start=state.calWeekStart, end=addDays(start,6);
-  const rangeEl=document.getElementById('cal-range'); if(rangeEl) rangeEl.textContent=`${formatDateShort(start)} – ${formatDateShort(end)}`;
-  const dows=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  let html='';
-  for(let i=0;i<7;i++){
-    const d=addDays(start,i);
-    const workouts=state.workouts.filter(w=>w.log_date===d);
-    const hasFood=state.foodLog.some(e=>e.log_date===d);
-    const dots=workouts.map(w=>{const c=w.name==='Upper'?'dot-upper':w.name==='Lower'?'dot-lower':'dot-muay';return `<span class="cal-dot ${c}"></span>`;}).join('') + (hasFood?'<span class="cal-dot dot-food"></span>':'');
-    const cls=['cal-day']; if(d===todayStr()) cls.push('today'); if(d===state.calSelectedDate) cls.push('selected');
-    html+=`<div class="${cls.join(' ')}" onclick="calSelectDay('${d}')">
-      <span class="cal-dow">${dows[i]}</span>
-      <span class="cal-dom">${parseInt(d.slice(8,10),10)}</span>
-      <span class="cal-markers">${dots}</span>
-    </div>`;
-  }
-  strip.innerHTML=html;
-}
-
-function renderCalDetail(){
-  const el=document.getElementById('cal-detail'); if(!el) return;
-  const d=state.calSelectedDate;
-  if(!d){ el.innerHTML='<div class="cal-detail-empty">Tap a day to see its workouts and food</div>'; return; }
-  const workouts=state.workouts.filter(w=>w.log_date===d);
-  const food=state.foodLog.filter(e=>e.log_date===d);
-  const exName={}; state.exercises.forEach(e=>exName[e.id]=e.name);
-
-  let html=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-      <div class="page-title" style="font-size:1.3rem">${formatDate(d)}</div>
-      <button class="btn-set" onclick="jumpToDate('${d}');switchPage('dashboard');" style="font-size:0.8rem;padding:7px 12px">Open on Dashboard →</button>
-    </div>`;
-
-  // ── WORKOUTS ──
-  html+='<div class="cal-section-label">Workouts</div>';
-  if(!workouts.length){ html+='<div style="color:var(--text-muted);font-size:0.85rem">No sessions logged</div>'; }
-  else {
-    html+=workouts.map(w=>{
-      const sets=state.exerciseSets.filter(s=>String(s.workout_id)===String(w.id));
-      let summary;
-      if(w.name==='Muay Thai'||!sets.length){ summary=w.name==='Muay Thai'?'<span class="wh-muay">🥊 Session complete</span>':'<span style="color:var(--text-muted)">No sets recorded</span>'; }
-      else { const byEx={}; sets.forEach(s=>{const k=s.exercise_id; if(!byEx[k]||e1rm(s.weight,s.reps)>e1rm(byEx[k].weight,byEx[k].reps)) byEx[k]=s;}); summary=Object.entries(byEx).map(([k,s])=>`<span class="wh-set">${exName[k]||'?'} ${(+s.weight)}×${s.reps}</span>`).join(''); }
-      const tag=w.name||'Workout'; const tagClass=tag==='Upper'?'tag-upper':tag==='Lower'?'tag-lower':'tag-muay';
-      return `<div class="workout-history-item">
-        <div class="wh-top"><span class="wh-tag ${tagClass}">${tag}</span></div>
-        <div class="wh-summary">${summary}</div>
-        <div class="cal-item-controls">
-          <label style="font-size:0.72rem;color:var(--text-muted)">Move to
-            <input type="date" value="${w.log_date}" onchange="rescheduleWorkout('${w.id}',this.value)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:4px 8px;font-family:'DM Sans',sans-serif;font-size:0.75rem;margin-left:4px">
-          </label>
-          ${w.name!=='Muay Thai'?`<button class="cal-mini-btn" onclick="loadWorkoutIntoBuilder('${w.id}')">✎ Edit sets</button>`:''}
-          <button class="cal-mini-btn" style="color:var(--red)" onclick="deleteWorkout('${w.id}')">✕ Delete</button>
-        </div>
-      </div>`;
-    }).join('');
-  }
-
-  // ── FOOD ──
-  html+=`<div class="cal-section-label" style="display:flex;align-items:center;justify-content:space-between">
-      <span>Food</span>
-      <button class="cal-mini-btn" onclick="calToggleAddFood()">${calAddOpen?'× Close':'+ Add meal'}</button>
-    </div>`;
-
-  if(calAddOpen){
-    html+=`<div class="cal-add-form">
-      <input class="set-input" id="caf-name" placeholder="Food / meal name" style="margin-bottom:8px">
-      <div class="cfe-grid">
-        <input class="set-input" id="caf-kcal" type="number" min="0" placeholder="kcal">
-        <input class="set-input" id="caf-protein" type="number" min="0" placeholder="P (g)">
-        <input class="set-input" id="caf-carbs" type="number" min="0" placeholder="C (g)">
-        <input class="set-input" id="caf-fat" type="number" min="0" placeholder="F (g)">
-        <input class="set-input" id="caf-fibre" type="number" min="0" placeholder="Fi (g)">
-      </div>
-      <div class="cal-edit-actions">
-        <button class="btn-log" style="flex:1" onclick="calAddFood('${d}')">+ Add meal</button>
-        <button class="btn-set" onclick="calToggleAddFood()">Cancel</button>
-      </div>
-    </div>`;
-  }
-
-  if(!food.length){ html+='<div style="color:var(--text-muted);font-size:0.85rem">No entries logged</div>'; }
-  else {
-    html+='<div class="food-log-list">'+food.map(e=>{
-      if(String(e.id)===String(calEditingFoodId)){
-        const esc=(e.name||'').replace(/"/g,'&quot;');
-        return `<div class="cal-food-edit">
-          <input class="set-input" id="cfe-name" value="${esc}" placeholder="Name">
-          <div class="cfe-grid">
-            <input class="set-input" id="cfe-kcal" type="number" min="0" value="${e.kcal||''}" placeholder="kcal">
-            <input class="set-input" id="cfe-protein" type="number" min="0" value="${e.protein||''}" placeholder="P">
-            <input class="set-input" id="cfe-carbs" type="number" min="0" value="${e.carbs||''}" placeholder="C">
-            <input class="set-input" id="cfe-fat" type="number" min="0" value="${e.fat||''}" placeholder="F">
-            <input class="set-input" id="cfe-fibre" type="number" min="0" value="${e.fibre||''}" placeholder="Fi">
-          </div>
-          <div class="cal-edit-actions">
-            <button class="btn-log" style="flex:1" onclick="calSaveEditFood('${e.id}')">Save</button>
-            <button class="btn-set" onclick="calCancelEditFood()">Cancel</button>
-          </div>
-        </div>`;
-      }
-      return `<div class="log-item">
-        <div class="log-item-name">${e.name}</div>
-        ${e.protein?`<div class="log-item-macro">P ${e.protein}g</div>`:''}
-        ${e.carbs?`<div class="log-item-macro">C ${e.carbs}g</div>`:''}
-        ${e.fat?`<div class="log-item-macro">F ${e.fat}g</div>`:''}
-        ${e.fibre?`<div class="log-item-macro">Fi ${e.fibre}g</div>`:''}
-        <div class="log-item-kcal">${(e.kcal||0).toLocaleString()} kcal</div>
-        <button class="btn-remove" onclick="calStartEditFood('${e.id}')" title="Edit">✎</button>
-        <button class="btn-remove" onclick="removeEntry('${e.id}')" title="Remove">✕</button>
-      </div>`;
-    }).join('')+'</div>';
-    html+=`<div style="font-size:0.8rem;color:var(--text-muted);margin-top:10px">${food.length} entr${food.length===1?'y':'ies'} logged</div>`;
-  }
-  el.innerHTML=html;
-}
-
-// ── Calendar food editing ──
-function calToggleAddFood(){ calAddOpen=!calAddOpen; calEditingFoodId=null; renderCalDetail(); }
-function calStartEditFood(id){ calEditingFoodId=id; calAddOpen=false; renderCalDetail(); }
-function calCancelEditFood(){ calEditingFoodId=null; renderCalDetail(); }
-async function calSaveEditFood(id){
-  const name=document.getElementById('cfe-name').value.trim();
-  const kcal=parseInt(document.getElementById('cfe-kcal').value)||0;
-  if(!name||!kcal){ toast('Enter a name and calories','error'); return; }
-  const fields={ name, kcal,
-    protein:parseFloat(document.getElementById('cfe-protein').value)||0,
-    carbs:parseFloat(document.getElementById('cfe-carbs').value)||0,
-    fat:parseFloat(document.getElementById('cfe-fat').value)||0,
-    fibre:parseFloat(document.getElementById('cfe-fibre').value)||0 };
-  const ok=await updateFoodEntry(id,fields);
-  if(ok){ calEditingFoodId=null; toast('Meal updated ✓','success'); afterDataChange(); }
-}
-async function calAddFood(date){
-  const name=document.getElementById('caf-name').value.trim();
-  const kcal=parseInt(document.getElementById('caf-kcal').value)||0;
-  if(!name||!kcal){ toast('Enter a name and calories','error'); return; }
-  const stored=await insertFoodEntry({ name, kcal,
-    protein:parseFloat(document.getElementById('caf-protein').value)||0,
-    carbs:parseFloat(document.getElementById('caf-carbs').value)||0,
-    fat:parseFloat(document.getElementById('caf-fat').value)||0,
-    fibre:parseFloat(document.getElementById('caf-fibre').value)||0,
-    log_time:nowTime(), log_date:date });
-  if(stored){ calAddOpen=false; toast('Meal added ✓','success'); afterDataChange(); }
-}
-
-window.addEventListener('resize',()=>{const active=document.querySelector('[id^="page-"]:not([style*="display: none"])');if(!active)return;if(active.id==='page-reports')renderReports();if(active.id==='page-workouts'){const sel=document.getElementById('progress-exercise');if(sel)drawProgressChart(sel.value);}});
-</script>
-</body>
-</html>
+ 
